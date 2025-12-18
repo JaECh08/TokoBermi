@@ -1,4 +1,4 @@
-﻿// --- FIREBASE CONFIGURATION ---
+// --- FIREBASE CONFIGURATION ---
 // No imports needed for Compat version
 
 // Emergency Error Tracking
@@ -1359,7 +1359,7 @@ function printToPDF(invoiceId) {
             // ISI TABEL & SUB TOTAL PER HALAMAN
             // ============================================
             let startY = 77;
-            const lineHeight = 10.55;
+            const lineHeight = 10.6;
             let subtotalPerHalaman = 0;
 
             doc.setFontSize(12);
@@ -1405,7 +1405,7 @@ function printToPDF(invoiceId) {
                 doc.text("TOTAL RP:", 160, 270, { align: "right" }); // Label Total
 
                 doc.setFontSize(16);
-                doc.text(formatRupiahSimple(invoice.total), 192, 270, { align: "right" }); // Angka Total digeser ke kanan
+                doc.text(formatRupiahSimple(invoice.total), 193.5, 270, { align: "right" }); // Angka Total digeser ke kanan
             }
         }
 
