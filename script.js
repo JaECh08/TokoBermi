@@ -953,6 +953,40 @@ document.getElementById('invoice-form').addEventListener('keydown', function (e)
 });
 
 function processInvoice() {
+    // Prevent Double-Click / Race Conditions
+    if (window.isProcessingInvoice) return;
+    window.isProcessingInvoice = true;
+
+    const btn = document.querySelector('.finish-button');
+    const originalText = btn ? btn.textContent : 'Pesanan Selesai';
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Memproses...';
+        btn.style.opacity = '0.7';
+        btn.style.cursor = 'not-allowed';
+    }
+
+    // Use setTimeout to allow UI to update ("Memproses...") before heavy logic
+    setTimeout(() => {
+        try {
+            processInvoiceInternal();
+        } catch (error) {
+            console.error("Critical Error in Invoice Processing:", error);
+            showAlert("Terjadi kesalahan sistem: " + error.message);
+        } finally {
+            window.isProcessingInvoice = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = originalText;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            }
+        }
+    }, 50);
+}
+
+function processInvoiceInternal() {
     try {
         const form = document.getElementById('invoice-form');
         const customerSearchInput = document.getElementById('customer-search-input');
@@ -1073,6 +1107,25 @@ function processInvoice() {
 
         // 3. UPDATE STOK BARANG (Real Update)
         let finalStock = getData('stock');
+
+        // SECURITY FIX: Lakukan pembersihan duplikat item di data persediaan
+        // Ini mencegah "hilangnya 10" jika ada 5 item duplikat dengan nama sama.
+        // Data dibersihkan dan akan disimpan kembali ke database.
+        const uniqueStock = [];
+        const seenNames = new Set();
+
+        if (finalStock && Array.isArray(finalStock)) {
+            finalStock.forEach(item => {
+                // Gunakan nama sebagai kunci unik
+                if (!seenNames.has(item.name)) {
+                    seenNames.add(item.name);
+                    uniqueStock.push(item);
+                } else {
+                    console.warn(`Duplicate stock item removed: ${item.name}`);
+                }
+            });
+            finalStock = uniqueStock;
+        }
 
         // A. Jika EDIT, kembalikan dulu stok lama ke database
         if (editingInvoiceId !== null) {
