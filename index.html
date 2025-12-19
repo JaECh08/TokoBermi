@@ -27,11 +27,17 @@
                 </div>
                 <div class="form-group">
                     <label>Password</label>
-                    <input type="password" id="login-password" placeholder="Masukkan password" required>
+                    <div class="password-wrapper">
+                        <input type="password" id="login-password" placeholder="Masukkan password" required>
+                        <button type="button" id="toggle-password" class="toggle-password-btn"
+                            onclick="togglePasswordVisibility()">
+                            <span id="eye-icon">👁</span>
+                        </button>
+                    </div>
                 </div>
                 <button type="submit" class="add-customer-button">Masuk ke Sistem</button>
             </form>
-            <div id="login-error" class="error-message" style="text-align: center; margin-top: 15px;"></div>
+            <div id="login-error" class="error-message"></div>
         </div>
     </div>
 
@@ -65,7 +71,7 @@
                     <span class="icon">🖨️</span> <span class="nav-label">Print Nota</span>
                 </button>
                 <div style="flex-grow: 1;"></div>
-                <button class="nav-item" onclick="logout()" style="margin-top: 20px; color: #f87171;">
+                <button id="logout-btn" class="nav-item nav-logout" onclick="logout()">
                     <span class="icon">🚪</span> <span class="nav-label">Logout</span>
                 </button>
             </nav>
@@ -76,7 +82,12 @@
         <main class="main-content">
             <header class="top-bar">
                 <div class="welcome-text">Selamat Datang, <strong>Ferryanto</strong></div>
-                <div class="date-display" id="current-date-display"></div>
+                <div class="header-right" style="display: flex; align-items: center; gap: 20px;">
+                    <div class="date-display" id="current-date-display"></div>
+                    <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+                        <span id="theme-icon">🌙</span>
+                    </button>
+                </div>
             </header>
 
             <div class="content-container">
@@ -84,23 +95,32 @@
                 <div id="home-screen" class="screen active fade-in">
                     <div class="dashboard-hero">
                         <h1>Selamat Datang di Aplikasi Toko Bermi</h1>
-                        <p>Kelola toko Anda dengan mudah, cepat, dan elegan.</p>
+                        <p>Menjual Berbagai Macam Cetakan Kue dan Peralatan Masak</p>
                     </div>
                     <div class="dashboard-cards">
-                        <div class="card action-card" onclick="showScreen('create-invoice')">
-                            <div class="card-icon">📝</div>
-                            <h3>Buat Nota Baru</h3>
-                            <p>Catat pesanan pelanggan</p>
-                        </div>
-                        <div class="card action-card" onclick="showScreen('stock-management')">
+                        <div class="card stats-card" onclick="showProductsDetail()">
                             <div class="card-icon">📦</div>
-                            <h3>Cek Stok</h3>
-                            <p>Pantau persediaan barang</p>
+                            <div class="stats-content">
+                                <h3>Total Produk</h3>
+                                <p class="stats-number" id="total-products">0</p>
+                                <p class="stats-label">Jenis Barang Tersedia</p>
+                            </div>
                         </div>
-                        <div class="card action-card" onclick="showScreen('print-invoice')">
-                            <div class="card-icon">🖨️</div>
-                            <h3>Riwayat Nota</h3>
-                            <p>Cetak nota</p>
+                        <div class="card stats-card" onclick="showCustomersDetail()">
+                            <div class="card-icon">👥</div>
+                            <div class="stats-content">
+                                <h3>Total Pelanggan</h3>
+                                <p class="stats-number" id="total-customers">0</p>
+                                <p class="stats-label">Pelanggan Terdaftar</p>
+                            </div>
+                        </div>
+                        <div class="card stats-card" onclick="showTransactionsDetail()">
+                            <div class="card-icon">📊</div>
+                            <div class="stats-content">
+                                <h3>Total Transaksi</h3>
+                                <p class="stats-number" id="total-transactions">0</p>
+                                <p class="stats-label">Nota Tersimpan</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -114,11 +134,14 @@
                     <form id="invoice-form">
                         <h3>Data Pemesan</h3>
                         <div class="form-group">
-                            <label for="customer-name">Nama Pelanggan:</label>
-                            <input list="customer-list" id="customer-name" name="customer-name"
-                                placeholder="Ketik nama pelanggan..." required onchange="updateCustomerDetails()"
-                                onfocus="this.value=''" autocomplete="off">
-                            <datalist id="customer-list"></datalist>
+                            <label for="customer-search-input">Nama Pelanggan:</label>
+                            <div class="autocomplete-wrapper">
+                                <input type="text" id="customer-search-input" name="customer-name"
+                                    placeholder="Ketik nama pelanggan..." required autocomplete="off"
+                                    class="customer-search-input">
+                                <input type="hidden" id="customer-key">
+                                <div class="custom-dropdown" id="customer-dropdown"></div>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label for="customer-city">Kota:</label>
@@ -145,6 +168,8 @@
                         <div class="invoice-action-buttons">
                             <button type="button" class="finish-button" onclick="processInvoice()">Pesanan
                                 Selesai</button>
+                            <button type="button" class="clear-form-button" onclick="clearInvoiceForm()">Hapus
+                                Semua</button>
                             <button type="button" id="cancel-edit-button" class="cancel-edit-button"
                                 onclick="cancelEdit()" style="display: none;">Batalkan Edit</button>
                         </div>
@@ -198,10 +223,20 @@
 
                     <div class="stock-controls" style="margin-bottom: 15px;">
                         <div class="search-group">
-                            <select id="stock-search-mode" onchange="renderStockTable()">
-                                <option value="name">Nama Barang</option>
-                                <option value="supplier">Supplier</option>
-                            </select>
+                            <!-- Custom Dropdown Structure replacing <select> -->
+                            <div class="custom-select-container" id="stock-search-container">
+                                <div class="custom-select-trigger" onclick="toggleCustomSelect()">
+                                    <span id="custom-select-value">Nama Barang</span>
+                                    <span class="custom-arrow"></span>
+                                </div>
+                                <div class="custom-options" id="custom-options-list">
+                                    <div class="custom-option selected" onclick="selectOption('name', 'Nama Barang')">
+                                        Nama Barang</div>
+                                    <div class="custom-option" onclick="selectOption('supplier', 'Supplier')">Supplier
+                                    </div>
+                                </div>
+                                <input type="hidden" id="stock-search-mode" value="name">
+                            </div>
                             <input type="text" id="stock-search-input" placeholder="Cari..."
                                 oninput="renderStockTable()">
                         </div>
@@ -258,8 +293,9 @@
                             <span>📥</span> Download data (Excel)
                         </button>
 
-                        <button onclick="scrollToTop()" class="back-to-top-btn">
-                            <span>↑</span> Back to Top
+                        <!-- Floating Back to Top Button -->
+                        <button onclick="scrollToTop()" class="back-to-top-btn" id="backToTopBtn">
+                            <span>↑</span> Go Back
                         </button>
                     </div>
 
@@ -422,6 +458,19 @@
         </div>
     </div>
 
+    <!-- Detail Modal for Statistics -->
+    <div id="detail-modal" class="modal">
+        <div class="modal-content detail-modal-content">
+            <div class="detail-modal-header">
+                <h2 id="detail-modal-title">Detail Informasi</h2>
+                <button class="detail-close-btn" onclick="closeDetailModal()">×</button>
+            </div>
+            <div class="detail-modal-body" id="detail-modal-body">
+                <!-- Content will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+
 
 
     <!-- Firebase SDK (Compat Version for file:// support) -->
@@ -431,6 +480,8 @@
 
     <!-- Main Application Script -->
     <script src="script.js"></script>
+    <script src="theme.js"></script>
+    <script src="detail_modal_functions.js"></script>
 </body>
 
 </html>
