@@ -287,10 +287,20 @@
 
 .stock-footer-actions .download-button {
     margin-top: 0;
+    margin-bottom: 0;
     /* Override default margin */
 }
 
+.stock-footer-actions .back-to-top-btn {
+    margin-top: 0;
+    margin-bottom: 0;
+    /* Ensure alignment with download button */
+}
+
 .back-to-top-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
     color: white;
     border: none;
@@ -299,24 +309,37 @@
     font-weight: 600;
     font-size: 0.95rem;
     cursor: pointer;
-    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.2);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+    gap: 8px;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(100px);
+    white-space: nowrap;
+}
+
+.back-to-top-btn.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
 }
 
 .back-to-top-btn:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(37, 99, 235, 0.3);
-    filter: brightness(1.1);
+    transform: translateY(-5px) scale(1.05);
+    box-shadow: 0 10px 30px rgba(37, 99, 235, 0.5);
+    filter: brightness(1.15);
 }
 
 .back-to-top-btn:active {
-    transform: translateY(-2px);
+    transform: translateY(-2px) scale(1.02);
 }
 
 .back-to-top-btn span {
-    font-size: 1.2rem;
+    font-size: 1.3rem;
     font-weight: bold;
+    line-height: 1;
 }
