@@ -11,8 +11,15 @@ var itemRowCounter = 0;
 var editingInvoiceId = null;
 
 // EMERGENCY ERROR TRACKING
-window.onerror = function (msg, url, line) {
-    alert("ERROR SYSTEM: " + msg + "\nBaris: " + line);
+// Disabled - using try-catch instead
+// window.onerror = function (msg, url, line) {
+//     alert("ERROR SYSTEM: " + msg + "\nBaris: " + line);
+// };
+window.onerror = function (msg, url, line, col, error) {
+    console.error("Global Error:", msg, "at line", line, "col", col);
+    console.error("Error object:", error);
+    // Don't show alert - let try-catch handle it
+    return true; // Prevent default error handling
 };
 
 const firebaseConfig = {
@@ -319,14 +326,14 @@ function formatRupiah(number) {
 function saveDraftInvoice() {
     const form = document.getElementById('invoice-form');
     const draft = {
-        customerName: form['customer-name'].value,
+        customerName: document.getElementById('customer-search-input').value,
         expedition: form['expedition'].value,
         items: []
     };
 
     const itemRows = document.querySelectorAll('.item-row');
     itemRows.forEach(row => {
-        const itemName = row.querySelector('input[list="stock-items-list"]').value;
+        const itemName = row.querySelector('.item-search-input').value;
         const qty = row.querySelector('input[type="number"]').value;
         if (itemName && qty > 0) {
             draft.items.push({ name: itemName, qty: parseInt(qty) });
@@ -342,7 +349,7 @@ function loadDraftInvoice() {
 
     const form = document.getElementById('invoice-form');
     if (draft.customerName) {
-        form['customer-name'].value = draft.customerName;
+        document.getElementById('customer-search-input').value = draft.customerName;
         updateCustomerDetails(); // Load detail customer
     }
     if (draft.expedition) {
@@ -357,7 +364,7 @@ function loadDraftInvoice() {
     draft.items.forEach(item => {
         addItemRow();
         const lastRow = container.lastElementChild;
-        const input = lastRow.querySelector('input[list="stock-items-list"]');
+        const input = lastRow.querySelector('.item-search-input');
         input.value = item.name;
         lastRow.querySelector('input[type="number"]').value = item.qty;
         updateItemDetails(input);
@@ -423,13 +430,18 @@ function showScreen(screenId) {
 
     // 3. Load Specific Data
     if (screenId === 'create-invoice') {
-        // loadCustomerOptions(); // Replaced
-        setupCustomerAutocomplete(); // Initialize autocomplete
-        loadStockDatalist();
-        updateInvoiceDate(); // Update tanggal nota
-        restoreFormData();
-        updateCustomerDetails();
-        calculateTotalAmount();
+        try {
+            // loadCustomerOptions(); // Replaced
+            setupCustomerAutocomplete(); // Initialize autocomplete
+            loadStockDatalist();
+            updateInvoiceDate(); // Update tanggal nota
+            restoreFormData();
+            updateCustomerDetails();
+            calculateTotalAmount();
+        } catch (error) {
+            console.error('Error saat membuka halaman Buat Nota:', error);
+            showAlert('Error saat membuka halaman: ' + error.message);
+        }
     } else if (screenId === 'stock-management') {
         renderStockTable();
         checkLowStock();
@@ -647,34 +659,45 @@ function loadStockDatalist() {
 }
 
 function updateCustomerDetails(providedKey) {
-    let key = providedKey;
+    try {
+        let key = providedKey;
 
-    // If no key provided (manual type), try to find by hidden input or exact name match
-    if (!key) {
-        key = document.getElementById('customer-key').value;
-    }
-
-    const customers = getData('customers');
-
-    // If still no key, try to find by text if exact match exists (fallback)
-    if (!key) {
-        const nameVal = document.getElementById('customer-search-input').value.trim();
-        if (nameVal) {
-            key = Object.keys(customers).find(k => {
-                const cName = customers[k].name;
-                return cName && cName.toLowerCase() === nameVal.toLowerCase();
-            });
+        // If no key provided (manual type), try to find by hidden input or exact name match
+        if (!key) {
+            const customerKeyInput = document.getElementById('customer-key');
+            if (customerKeyInput) {
+                key = customerKeyInput.value;
+            }
         }
-    }
 
-    const cityInput = document.getElementById('customer-city');
-    const phoneInput = document.getElementById('customer-phone');
-    const expeditionInput = document.getElementById('expedition');
+        const customers = getData('customers');
 
-    if (key && customers[key]) {
-        cityInput.value = customers[key].city;
-        phoneInput.value = customers[key].phone;
-        expeditionInput.value = customers[key].expedition || '';
+        // If still no key, try to find by text if exact match exists (fallback)
+        if (!key) {
+            const customerSearchInput = document.getElementById('customer-search-input');
+            if (customerSearchInput) {
+                const nameVal = customerSearchInput.value.trim();
+                if (nameVal) {
+                    key = Object.keys(customers).find(k => {
+                        const cName = customers[k].name;
+                        return cName && cName.toLowerCase() === nameVal.toLowerCase();
+                    });
+                }
+            }
+        }
+
+        const cityInput = document.getElementById('customer-city');
+        const phoneInput = document.getElementById('customer-phone');
+        const expeditionInput = document.getElementById('expedition');
+
+        if (key && customers[key]) {
+            if (cityInput) cityInput.value = customers[key].city || '';
+            if (phoneInput) phoneInput.value = customers[key].phone || '';
+            if (expeditionInput) expeditionInput.value = customers[key].expedition || '';
+        }
+    } catch (error) {
+        console.error('Error di updateCustomerDetails:', error);
+        // Silent fail - tidak perlu alert karena ini bukan critical error
     }
 }
 
@@ -861,7 +884,7 @@ function updateItemDetails(inputElement) {
     if (!itemName) return;
 
     // FITUR: CEK BARANG DUPLIKAT
-    const allItemInputs = document.querySelectorAll('input[list="stock-items-list"]');
+    const allItemInputs = document.querySelectorAll('.item-search-input');
     for (let otherInput of allItemInputs) {
         if (otherInput !== inputElement && otherInput.value.trim().toLowerCase() === itemName.toLowerCase()) {
             showAlert('⚠️ Barang ini sudah ada di daftar pesanan! Harap edit jumlahnya saja.');
@@ -930,138 +953,187 @@ document.getElementById('invoice-form').addEventListener('keydown', function (e)
 });
 
 function processInvoice() {
-    const form = document.getElementById('invoice-form');
-    const customerName = form['customer-name'].value;
-    const expedition = form['expedition'].value;
-    const errorDiv = document.getElementById('stock-error');
-    errorDiv.textContent = ''; // Clear previous error
+    try {
+        const form = document.getElementById('invoice-form');
+        const customerSearchInput = document.getElementById('customer-search-input');
+        const expeditionInput = form ? form['expedition'] : null;
+        const errorDiv = document.getElementById('stock-error');
 
-    // 1. Validasi Input Data Pemesan dan Ekspedisi
-    if (!customerName || !expedition) {
-        showAlert('Tolong input semua data Pemesan dan Ekspedisi.');
-        return;
-    }
-
-    // --- PERSIAPAN VALIDASI STOK (Validation Stock) ---
-    // Buat map sementara untuk validasi stok tanpa mengubah data asli dulu
-    const stockData = getData('stock');
-    const tempStockMap = {};
-    stockData.forEach(item => {
-        tempStockMap[item.name] = item.stock;
-    });
-
-    // Jika sedang EDIT, kembalikan stok lama ke tempStockMap untuk validasi
-    if (editingInvoiceId !== null) {
-        const existingInvoices = getData('invoices');
-        const oldInvoice = existingInvoices.find(inv => inv.id === editingInvoiceId);
-        if (oldInvoice && oldInvoice.items) {
-            oldInvoice.items.forEach(oldItem => {
-                if (tempStockMap.hasOwnProperty(oldItem.name)) {
-                    tempStockMap[oldItem.name] += oldItem.qty;
-                }
-            });
-        }
-    }
-
-    const items = [];
-    const itemRows = document.querySelectorAll('.item-row');
-    let grandTotal = 0;
-    let isStockSufficient = true;
-    const newStockUpdates = {}; // Untuk menyimpan perubahan stok jika valid
-
-    // 2. Validasi dan Pengumpulan Data Barang
-    itemRows.forEach(row => {
-        const itemName = row.querySelector('input[list="stock-items-list"]').value;
-        const qty = parseFloat(row.querySelector('input[type="number"]').value);
-        const price = parseFloat(row.getAttribute('data-price'));
-
-        const currentStockItem = stockData.find(s => s.name === itemName);
-
-        if (!currentStockItem) {
-            isStockSufficient = false;
-            showAlert(`⚠️ Barang "${itemName}" tidak tersedia di program. Harap pilih dari daftar yang ada.`);
+        // Null checks
+        if (!form) {
+            console.error('Form tidak ditemukan');
+            showAlert('Error: Form tidak ditemukan. Silakan refresh halaman.');
             return;
         }
 
-        if (!itemName || qty <= 0 || isNaN(price)) {
-            isStockSufficient = false;
-            showAlert('Tolong lengkapi semua data barang dengan benar (Nama Barang, Jumlah, Harga).');
+        if (!customerSearchInput) {
+            console.error('Customer search input tidak ditemukan');
+            showAlert('Error: Input pelanggan tidak ditemukan. Silakan refresh halaman.');
             return;
         }
 
-        // Validasi Stok menggunakan tempStockMap (Estimasi stok setelah pengembalian barang lama)
-        const availableStock = tempStockMap[itemName] || 0;
-
-        // Cek apakah stok cukup (perhitungkan juga jika item yang sama muncul multiple kali di form baru)
-        const currentUsage = (newStockUpdates[itemName] || 0) + qty;
-
-        if (availableStock < currentUsage) {
-            isStockSufficient = false;
-            errorDiv.textContent = `Stock barang "${itemName}" tidak mencukupi. (Tersedia: ${availableStock})`;
-            showAlert(`Stock barang "${itemName}" tidak mencukupi. (Tersedia: ${availableStock})`);
+        if (!expeditionInput) {
+            console.error('Expedition input tidak ditemukan');
+            showAlert('Error: Input ekspedisi tidak ditemukan. Silakan refresh halaman.');
             return;
         }
 
-        const subtotal = qty * price;
-        grandTotal += subtotal;
+        const customerName = customerSearchInput.value;
+        const expedition = expeditionInput.value;
 
-        items.push({
-            name: itemName,
-            qty: qty,
-            price: price,
-            subtotal: subtotal,
-            unit: currentStockItem.unit
+        if (errorDiv) {
+            errorDiv.textContent = ''; // Clear previous error
+        }
+
+        // 1. Validasi Input Data Pemesan dan Ekspedisi
+        if (!customerName || !expedition) {
+            showAlert('Tolong input semua data Pemesan dan Ekspedisi.');
+            return;
+        }
+
+        // --- PERSIAPAN VALIDASI STOK (Validation Stock) ---
+        // Buat map sementara untuk validasi stok tanpa mengubah data asli dulu
+        const stockData = getData('stock');
+        const tempStockMap = {};
+        stockData.forEach(item => {
+            tempStockMap[item.name] = item.stock;
         });
 
-        // Simpan update stok untuk dieksekusi setelah semua validasi
-        newStockUpdates[itemName] = currentUsage;
-    });
+        // Jika sedang EDIT, kembalikan stok lama ke tempStockMap untuk validasi
+        if (editingInvoiceId !== null) {
+            const existingInvoices = getData('invoices');
+            const oldInvoice = existingInvoices.find(inv => inv.id === editingInvoiceId);
+            if (oldInvoice && oldInvoice.items) {
+                oldInvoice.items.forEach(oldItem => {
+                    if (tempStockMap.hasOwnProperty(oldItem.name)) {
+                        tempStockMap[oldItem.name] += oldItem.qty;
+                    }
+                });
+            }
+        }
 
-    if (!isStockSufficient || items.length === 0) {
-        if (items.length === 0) showAlert('Periksa kembali pesanan Anda, pastikan stock cukup dan semua field terisi.');
-        return; // Hentikan proses jika stok tidak cukup atau data barang tidak lengkap
-    }
+        const items = [];
+        const itemRows = document.querySelectorAll('.item-row');
+        let grandTotal = 0;
+        let isStockSufficient = true;
+        const newStockUpdates = {}; // Untuk menyimpan perubahan stok jika valid
 
-    // 3. UPDATE STOK BARANG (Real Update)
-    let finalStock = getData('stock');
+        // 2. Validasi dan Pengumpulan Data Barang
+        itemRows.forEach(row => {
+            const itemName = row.querySelector('.item-search-input').value;
+            const qty = parseFloat(row.querySelector('input[type="number"]').value);
+            const price = parseFloat(row.getAttribute('data-price'));
 
-    // A. Jika EDIT, kembalikan dulu stok lama ke database
-    if (editingInvoiceId !== null) {
-        const existingInvoices = getData('invoices');
-        const oldInvoice = existingInvoices.find(inv => inv.id === editingInvoiceId);
-        if (oldInvoice && oldInvoice.items) {
-            finalStock = finalStock.map(stockItem => {
-                const oldItem = oldInvoice.items.find(i => i.name === stockItem.name);
-                if (oldItem) {
-                    stockItem.stock += oldItem.qty;
-                }
-                return stockItem;
+            const currentStockItem = stockData.find(s => s.name === itemName);
+
+            if (!currentStockItem) {
+                isStockSufficient = false;
+                showAlert(`⚠️ Barang "${itemName}" tidak tersedia di program. Harap pilih dari daftar yang ada.`);
+                return;
+            }
+
+            if (!itemName || qty <= 0 || isNaN(price)) {
+                isStockSufficient = false;
+                showAlert('Tolong lengkapi semua data barang dengan benar (Nama Barang, Jumlah, Harga).');
+                return;
+            }
+
+            // Validasi Stok menggunakan tempStockMap (Estimasi stok setelah pengembalian barang lama)
+            const availableStock = tempStockMap[itemName] || 0;
+
+            // Cek apakah stok cukup (perhitungkan juga jika item yang sama muncul multiple kali di form baru)
+            const currentUsage = (newStockUpdates[itemName] || 0) + qty;
+
+            if (availableStock < currentUsage) {
+                isStockSufficient = false;
+                errorDiv.textContent = `Stock barang "${itemName}" tidak mencukupi. (Tersedia: ${availableStock})`;
+                showAlert(`Stock barang "${itemName}" tidak mencukupi. (Tersedia: ${availableStock})`);
+                return;
+            }
+
+            const subtotal = qty * price;
+            grandTotal += subtotal;
+
+            items.push({
+                name: itemName,
+                qty: qty,
+                price: price,
+                subtotal: subtotal,
+                unit: currentStockItem.unit
             });
+
+            // Simpan update stok untuk dieksekusi setelah semua validasi
+            newStockUpdates[itemName] = currentUsage;
+        });
+
+        if (!isStockSufficient || items.length === 0) {
+            if (items.length === 0) showAlert('Periksa kembali pesanan Anda, pastikan stock cukup dan semua field terisi.');
+            return; // Hentikan proses jika stok tidak cukup atau data barang tidak lengkap
         }
-    }
 
-    // B. Kurangi stok berdasarkan item baru (newStockUpdates)
-    finalStock = finalStock.map(item => {
-        if (newStockUpdates[item.name]) {
-            item.stock -= newStockUpdates[item.name];
+        // 3. UPDATE STOK BARANG (Real Update)
+        let finalStock = getData('stock');
+
+        // A. Jika EDIT, kembalikan dulu stok lama ke database
+        if (editingInvoiceId !== null) {
+            const existingInvoices = getData('invoices');
+            const oldInvoice = existingInvoices.find(inv => inv.id === editingInvoiceId);
+            if (oldInvoice && oldInvoice.items) {
+                finalStock = finalStock.map(stockItem => {
+                    const oldItem = oldInvoice.items.find(i => i.name === stockItem.name);
+                    if (oldItem) {
+                        stockItem.stock += oldItem.qty;
+                    }
+                    return stockItem;
+                });
+            }
         }
-        return item;
-    });
 
-    saveData('stock', finalStock);
+        // B. Kurangi stok berdasarkan item baru (newStockUpdates)
+        finalStock = finalStock.map(item => {
+            if (newStockUpdates[item.name]) {
+                item.stock -= newStockUpdates[item.name];
+            }
+            return item;
+        });
 
-    // 4. Simpan Nota
-    const invoices = getData('invoices');
-    const city = document.getElementById('customer-city').value;
-    const phone = document.getElementById('customer-phone').value;
+        saveData('stock', finalStock);
 
-    if (editingInvoiceId !== null) {
-        // MODE EDIT: Update existing invoice
-        const invoiceIndex = invoices.findIndex(inv => inv.id === editingInvoiceId);
+        // 4. Simpan Nota
+        const invoices = getData('invoices');
+        const city = document.getElementById('customer-city').value;
+        const phone = document.getElementById('customer-phone').value;
 
-        if (invoiceIndex !== -1) {
-            invoices[invoiceIndex] = {
-                ...invoices[invoiceIndex],
+        if (editingInvoiceId !== null) {
+            // MODE EDIT: Update existing invoice
+            const invoiceIndex = invoices.findIndex(inv => inv.id === editingInvoiceId);
+
+            if (invoiceIndex !== -1) {
+                invoices[invoiceIndex] = {
+                    ...invoices[invoiceIndex],
+                    customer: customerName,
+                    city: city,
+                    phone: phone,
+                    expedition: expedition,
+                    items: items,
+                    total: grandTotal
+                };
+
+                saveData('invoices', invoices);
+                showAlert(`Nota ${customerName} berhasil diperbarui!`);
+
+                // Reset editing mode
+                editingInvoiceId = null;
+            } else {
+                showAlert('Error: Nota yang diedit tidak ditemukan!');
+                return;
+            }
+        } else {
+            // MODE BUAT BARU: Create new invoice
+            const invoiceNumber = invoices.length + 1;
+            const newInvoice = {
+                id: invoiceNumber,
+                date: new Date().toLocaleDateString('id-ID'),
                 customer: customerName,
                 city: city,
                 phone: phone,
@@ -1070,45 +1142,30 @@ function processInvoice() {
                 total: grandTotal
             };
 
+            invoices.push(newInvoice);
             saveData('invoices', invoices);
-            showAlert(`Nota ${customerName} berhasil diperbarui!`);
-
-            // Reset editing mode
-            editingInvoiceId = null;
-        } else {
-            showAlert('Error: Nota yang diedit tidak ditemukan!');
-            return;
+            showAlert(`Pesanan ${customerName} ${newInvoice.date} berhasil disimpan!`);
         }
-    } else {
-        // MODE BUAT BARU: Create new invoice
-        const invoiceNumber = invoices.length + 1;
-        const newInvoice = {
-            id: invoiceNumber,
-            date: new Date().toLocaleDateString('id-ID'),
-            customer: customerName,
-            city: city,
-            phone: phone,
-            expedition: expedition,
-            items: items,
-            total: grandTotal
-        };
 
-        invoices.push(newInvoice);
-        saveData('invoices', invoices);
-        showAlert(`Pesanan ${customerName} ${newInvoice.date} berhasil disimpan!`);
+        // 5. Reset Form dan Kembali ke Home
+        if (form) form.reset();
+
+        const itemsList = document.getElementById('items-list');
+        if (itemsList) itemsList.innerHTML = ''; // Hapus semua baris item
+
+        // Hide cancel edit button
+        const cancelBtn = document.getElementById('cancel-edit-button');
+        if (cancelBtn) cancelBtn.style.display = 'none';
+
+        const totalAmount = document.getElementById('total-amount');
+        if (totalAmount) totalAmount.textContent = 'Total: Rp 0';
+
+        localStorage.removeItem('invoiceFormData'); // Hapus saved form data
+        showScreen('home-screen');
+    } catch (error) {
+        console.error('Error di processInvoice:', error);
+        showAlert('Terjadi error saat memproses nota: ' + error.message);
     }
-
-    // 5. Reset Form dan Kembali ke Home
-    form.reset();
-    document.getElementById('items-list').innerHTML = ''; // Hapus semua baris item
-
-    // Hide cancel edit button
-    const cancelBtn = document.getElementById('cancel-edit-button');
-    if (cancelBtn) cancelBtn.style.display = 'none';
-
-    document.getElementById('total-amount').textContent = 'Total: Rp 0';
-    localStorage.removeItem('invoiceFormData'); // Hapus saved form data
-    showScreen('home-screen');
 }
 
 // --- FUNGSI STOK BARANG ---
@@ -1382,7 +1439,7 @@ function saveFormData() {
 
     const itemRows = document.querySelectorAll('.item-row');
     itemRows.forEach(row => {
-        const itemNameInput = row.querySelector('input[list="stock-items-list"]');
+        const itemNameInput = row.querySelector('.item-search-input');
         const itemName = itemNameInput ? itemNameInput.value : '';
         const qtyInput = row.querySelector('input[name^="item-qty-"]');
         const qty = qtyInput ? qtyInput.value : 0;
@@ -1420,7 +1477,7 @@ function restoreFormData() {
     formData.items.forEach(item => {
         addItemRow();
         const lastRow = container.lastElementChild;
-        const input = lastRow.querySelector('input[list="stock-items-list"]');
+        const input = lastRow.querySelector('.item-search-input');
         if (input) {
             input.value = item.itemName;
             lastRow.querySelector('input[name^="item-qty-"]').value = item.qty;
@@ -1858,51 +1915,96 @@ function editInvoice(invoiceId) {
     // Navigate to create-invoice screen
     showScreen('create-invoice');
 
-    // Populate form with invoice data
-    const form = document.getElementById('invoice-form');
-    // form['customer-name'].value = invoice.customer; // OLD
-    document.getElementById('customer-search-input').value = invoice.customer; // NEW
+    // Wait for DOM to be ready before populating form
+    setTimeout(() => {
+        // Populate form with invoice data
+        const form = document.getElementById('invoice-form');
+        if (!form) {
+            console.error('Form tidak ditemukan!');
+            return;
+        }
 
-    // Try to find key if possible to populate hidden field?
-    // Not strictly necessary if updating details works by name match fallback, 
-    // but better if we can find it.
+        // Set customer data
+        const customerSearchInput = document.getElementById('customer-search-input');
+        const customerCity = document.getElementById('customer-city');
+        const customerPhone = document.getElementById('customer-phone');
+        const expeditionInput = form['expedition'];
 
-    document.getElementById('customer-city').value = invoice.city || '';
-    document.getElementById('customer-phone').value = invoice.phone || '';
-    form['expedition'].value = invoice.expedition;
+        if (customerSearchInput) customerSearchInput.value = invoice.customer;
+        if (customerCity) customerCity.value = invoice.city || '';
+        if (customerPhone) customerPhone.value = invoice.phone || '';
+        if (expeditionInput) expeditionInput.value = invoice.expedition;
 
-    // Update customer details display
-    updateCustomerDetails();
+        // Update customer details display
+        if (typeof updateCustomerDetails === 'function') {
+            updateCustomerDetails();
+        }
 
-    // Clear existing item rows
-    document.getElementById('items-list').innerHTML = '';
-    itemRowCounter = 0;
+        // Clear existing item rows
+        const itemsList = document.getElementById('items-list');
+        if (itemsList) {
+            itemsList.innerHTML = '';
+            itemRowCounter = 0;
+        }
 
-    // Add item rows with invoice data
-    invoice.items.forEach(item => {
-        addItemRow();
-        const lastRow = document.getElementById('items-list').lastElementChild;
-        const itemInput = lastRow.querySelector('input[list="stock-items-list"]');
-        const qtyInput = lastRow.querySelector('input[type="number"]');
+        // Add item rows with invoice data
+        if (invoice.items && invoice.items.length > 0) {
+            // First, add all rows
+            invoice.items.forEach(() => {
+                addItemRow();
+            });
 
-        itemInput.value = item.name;
-        qtyInput.value = item.qty;
+            // Then, populate each row with data after a delay
+            setTimeout(() => {
+                const itemsList = document.getElementById('items-list');
+                if (!itemsList) return;
 
-        // Set price data attribute
-        lastRow.setAttribute('data-price', item.price);
+                const allRows = itemsList.querySelectorAll('.item-row');
 
-        // Update item details to populate unit and subtotal
-        updateItemDetails(itemInput);
-    });
+                invoice.items.forEach((item, index) => {
+                    const currentRow = allRows[index];
+                    if (!currentRow) {
+                        console.error(`Row ${index} tidak ditemukan`);
+                        return;
+                    }
 
-    // Calculate total
-    calculateTotalAmount();
+                    // Use correct selector for item input
+                    const itemInput = currentRow.querySelector('.item-search-input');
+                    const qtyInput = currentRow.querySelector('input[type="number"]');
 
-    // Show cancel edit button
-    document.getElementById('cancel-edit-button').style.display = 'inline-block';
+                    if (itemInput && qtyInput) {
+                        itemInput.value = item.name;
+                        qtyInput.value = item.qty;
 
-    showAlert('Mode Edit Nota: Silakan ubah data yang diperlukan, lalu klik "Pesanan Selesai" untuk menyimpan perubahan.');
+                        // Set price data attribute
+                        currentRow.setAttribute('data-price', item.price);
+
+                        // Update item details to populate unit and subtotal
+                        if (typeof updateItemDetails === 'function') {
+                            updateItemDetails(itemInput);
+                        }
+                    }
+                });
+
+                // Calculate total after all items are populated
+                setTimeout(() => {
+                    if (typeof calculateTotalAmount === 'function') {
+                        calculateTotalAmount();
+                    }
+                }, 200);
+            }, 300); // Wait for all rows to be created
+        }
+
+        // Show cancel edit button
+        const cancelEditBtn = document.getElementById('cancel-edit-button');
+        if (cancelEditBtn) {
+            cancelEditBtn.style.display = 'inline-block';
+        }
+
+        showAlert('Mode Edit Nota: Silakan ubah data yang diperlukan, lalu klik "Pesanan Selesai" untuk menyimpan perubahan.');
+    }, 200); // Wait 200ms for screen transition to complete
 }
+window.editInvoice = editInvoice;
 
 function cancelEdit() {
     showConfirm('Apakah Anda yakin ingin membatalkan edit nota?', () => {
@@ -1926,6 +2028,7 @@ function cancelEdit() {
         showAlert('Edit nota dibatalkan.');
     }, 'Ya, Batalkan');
 }
+window.cancelEdit = cancelEdit;
 
 function clearInvoiceForm() {
     showConfirm('Apakah Anda yakin ingin menghapus seluruh isi data di form ini?', () => {
