@@ -12,7 +12,7 @@ var editingInvoiceId = null;
 
 // EMERGENCY ERROR TRACKING
 window.onerror = function (msg, url, line) {
-    alert("EROR SISTEM: " + msg + "\nBaris: " + line);
+    alert("ERROR SYSTEM: " + msg + "\nBaris: " + line);
 };
 
 const firebaseConfig = {
@@ -85,27 +85,45 @@ const setupLogin = () => {
             const pass = document.getElementById('login-password').value;
             const errorMsg = document.getElementById('login-error');
 
-            if (errorMsg) {
-                errorMsg.style.color = "blue";
-                errorMsg.textContent = "Sedang mencoba masuk... Mohon tunggu.";
-            }
+            // Removed loading message as requested
+
 
             try {
                 await auth.signInWithEmailAndPassword(email, pass);
             } catch (error) {
                 console.error("Login Error:", error.code);
                 if (errorMsg) {
-                    errorMsg.style.color = "red";
-                    errorMsg.textContent = "GAGAL: " + error.message;
+                    errorMsg.style.color = "#ef4444"; // Modern red
+                    let userMsg = "Email atau Password salah. Silakan coba lagi.";
+                    if (error.code === 'auth/network-request-failed') {
+                        userMsg = "Koneksi internet bermasalah. Cek koneksi Anda.";
+                    }
+                    errorMsg.textContent = userMsg;
                 }
-                alert("Login Gagal: " + error.message);
             }
         };
     } else {
         setTimeout(setupLogin, 500);
     }
 };
+// Initial Login Setup Call
 setupLogin();
+
+function togglePasswordVisibility() {
+    const passwordInput = document.getElementById('login-password');
+    const eyeIcon = document.getElementById('eye-icon');
+
+    if (passwordInput && eyeIcon) {
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            eyeIcon.textContent = '👁'; // Standard eye
+        } else {
+            passwordInput.type = 'password';
+            eyeIcon.textContent = '👁'; // Keep same or use slash if preferred, but user wants "mata biasa"
+        }
+    }
+}
+window.togglePasswordVisibility = togglePasswordVisibility;
 
 // Logout Function
 // Logout Function
@@ -186,6 +204,9 @@ function syncUI() {
         loadCustomerOptions();
         loadStockDatalist();
     }
+    if (activeScreen.id === 'home-screen') {
+        updateDashboardStats();
+    }
 }
 
 // --- UTILITY FUNCTIONS (Adapted for Firebase) ---
@@ -217,6 +238,55 @@ function scrollToTop() {
     }
 }
 window.scrollToTop = scrollToTop;
+
+// Handle Back to Top Button Visibility
+function handleBackToTopButton() {
+    const container = document.querySelector('.content-container');
+    const backToTopBtn = document.getElementById('backToTopBtn');
+    const stockFooter = document.querySelector('.stock-footer-actions');
+
+    if (!container || !backToTopBtn) return;
+
+    container.addEventListener('scroll', function () {
+        const scrollTop = container.scrollTop;
+        const scrollHeight = container.scrollHeight;
+        const clientHeight = container.clientHeight;
+
+        // Show button when scrolled down more than 300px
+        if (scrollTop > 300) {
+            backToTopBtn.classList.add('show');
+        } else {
+            backToTopBtn.classList.remove('show');
+        }
+
+        // Check if user is near the bottom (within 200px of bottom)
+        const isNearBottom = (scrollHeight - scrollTop - clientHeight) < 200;
+
+        if (stockFooter && isNearBottom) {
+            // When near bottom, make button static (not floating)
+            backToTopBtn.style.position = 'static';
+            backToTopBtn.style.float = 'right';
+            backToTopBtn.style.marginTop = '0';
+            backToTopBtn.style.marginLeft = '15px';
+            backToTopBtn.style.bottom = '';
+            backToTopBtn.style.right = '';
+        } else {
+            // When scrolling normally, make button fixed (floating)
+            backToTopBtn.style.position = 'fixed';
+            backToTopBtn.style.float = 'none';
+            backToTopBtn.style.bottom = '30px';
+            backToTopBtn.style.right = '30px';
+            backToTopBtn.style.marginTop = '';
+            backToTopBtn.style.marginLeft = '';
+        }
+    });
+}
+
+// Initialize back to top button handler when page loads
+document.addEventListener('DOMContentLoaded', function () {
+    setTimeout(handleBackToTopButton, 500);
+});
+
 
 // Initial data logic (only run if db is empty)
 async function initializeData() {
@@ -345,9 +415,16 @@ function showScreen(screenId) {
         activeButton.classList.add('active');
     }
 
+    // SCROLL TO TOP FIX
+    const contentContainer = document.querySelector('.content-container');
+    if (contentContainer) {
+        contentContainer.scrollTop = 0;
+    }
+
     // 3. Load Specific Data
     if (screenId === 'create-invoice') {
-        loadCustomerOptions();
+        // loadCustomerOptions(); // Replaced
+        setupCustomerAutocomplete(); // Initialize autocomplete
         loadStockDatalist();
         updateInvoiceDate(); // Update tanggal nota
         restoreFormData();
@@ -364,8 +441,62 @@ function showScreen(screenId) {
         currentSortOrder = 'newest';
         document.getElementById('sort-toggle').textContent = 'Urutkan: Terbaru';
         renderInvoicesList();
+    } else if (screenId === 'home-screen') {
+        updateDashboardStats();
     }
 }
+
+// --- UPDATE DASHBOARD STATISTICS ---
+function updateDashboardStats() {
+    const stock = getData('stock') || [];
+    const customers = getData('customers') || {};
+    const invoices = getData('invoices') || [];
+
+    // Count total products
+    const totalProducts = stock.length;
+
+    // Count total customers
+    const totalCustomers = Object.keys(customers).length;
+
+    // Count total transactions
+    const totalTransactions = invoices.length;
+
+    // Update DOM with animation
+    animateNumber('total-products', totalProducts);
+    animateNumber('total-customers', totalCustomers);
+    animateNumber('total-transactions', totalTransactions);
+}
+
+// Animate number counting effect
+function animateNumber(elementId, targetNumber) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    const duration = 1000; // 1 second
+    const startNumber = 0;
+    const startTime = performance.now();
+
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        // Easing function for smooth animation
+        const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+        const current = Math.floor(startNumber + (targetNumber - startNumber) * easeOutQuart);
+
+        element.textContent = current;
+
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        } else {
+            element.textContent = targetNumber;
+        }
+    }
+
+    requestAnimationFrame(update);
+}
+
+window.updateDashboardStats = updateDashboardStats;
 
 
 function updateDateDisplay() {
@@ -397,20 +528,106 @@ function checkLowStock() {
 
 // --- FUNGSI MEMBUAT NOTA ---
 
-function loadCustomerOptions() {
-    const customers = getData('customers');
-    const datalist = document.getElementById('customer-list');
-    datalist.innerHTML = '';
+// function loadCustomerOptions() { ... } // Replaced by custom autocomplete
+function setupCustomerAutocomplete() {
+    const input = document.getElementById('customer-search-input');
+    const hiddenInput = document.getElementById('customer-key');
+    const dropdown = document.getElementById('customer-dropdown');
 
-    // Ambil semua key (compound key) dan urutkan
-    const sortedKeys = Object.keys(customers).sort();
+    if (!input || !dropdown) return;
 
-    sortedKeys.forEach(key => {
-        const option = document.createElement('option');
-        option.value = key;
-        option.textContent = key;
-        datalist.appendChild(option);
+    let currentFocus = -1;
+
+    input.addEventListener('input', function () {
+        const val = this.value;
+        const customers = getData('customers');
+
+        dropdown.innerHTML = '';
+        currentFocus = -1;
+        hiddenInput.value = ''; // Reset key on type
+
+        if (!val) {
+            dropdown.classList.remove('show');
+            return;
+        }
+
+        let matchCount = 0;
+        const keys = Object.keys(customers).sort();
+
+        keys.forEach(key => {
+            const cust = customers[key];
+            // Sanitasi: Pastikan name tidak berisi format key (terkadang data lama error)
+            let cleanName = cust.name;
+            if (!cleanName || (cleanName.includes('(') && cleanName.includes(') - HP:'))) {
+                cleanName = key.split(' (')[0];
+            }
+
+            // Search ONLY in Name as requested
+            const searchStr = cleanName.toLowerCase();
+
+            if (searchStr.includes(val.toLowerCase())) {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'dropdown-item';
+
+                const regex = new RegExp(`(${val})`, 'gi');
+                const nameHtml = cleanName.replace(regex, '<span class="match-text">$1</span>');
+
+                itemDiv.innerHTML = `
+                    <div style="display:flex; flex-direction:column;">
+                        <span style="font-weight:600;">${nameHtml}</span>
+                        <span style="font-size:0.8rem; color:gray;">${cust.city} - ${cust.phone}</span>
+                    </div>
+                `;
+
+                itemDiv.addEventListener('click', function () {
+                    input.value = cleanName; // Show only CLEAN name
+                    hiddenInput.value = key;
+                    closeAllDropdowns();
+                    updateCustomerDetails(key);
+                });
+
+                dropdown.appendChild(itemDiv);
+                matchCount++;
+            }
+        });
+
+        if (matchCount > 0) {
+            dropdown.classList.add('show');
+        } else {
+            dropdown.classList.remove('show');
+        }
     });
+
+    input.addEventListener('keydown', function (e) {
+        let x = dropdown.querySelectorAll('.dropdown-item');
+        if (e.keyCode == 40) { // Down
+            currentFocus++;
+            addActive(x);
+        } else if (e.keyCode == 38) { // Up
+            currentFocus--;
+            addActive(x);
+        } else if (e.keyCode == 13) { // Enter
+            e.preventDefault();
+            if (currentFocus > -1) {
+                if (x) x[currentFocus].click();
+            }
+        }
+    });
+
+    function addActive(x) {
+        if (!x) return false;
+        removeActive(x);
+        if (currentFocus >= x.length) currentFocus = 0;
+        if (currentFocus < 0) currentFocus = (x.length - 1);
+        x[currentFocus].classList.add('focused');
+        x[currentFocus].scrollIntoView({ block: 'nearest' });
+    }
+
+    function removeActive(x) {
+        for (let i = 0; i < x.length; i++) {
+            x[i].classList.remove('focused');
+        }
+    }
 }
 
 function loadStockDatalist() {
@@ -429,17 +646,35 @@ function loadStockDatalist() {
     });
 }
 
-function updateCustomerDetails() {
-    const id = document.getElementById('customer-name').value;
+function updateCustomerDetails(providedKey) {
+    let key = providedKey;
+
+    // If no key provided (manual type), try to find by hidden input or exact name match
+    if (!key) {
+        key = document.getElementById('customer-key').value;
+    }
+
+    const customers = getData('customers');
+
+    // If still no key, try to find by text if exact match exists (fallback)
+    if (!key) {
+        const nameVal = document.getElementById('customer-search-input').value.trim();
+        if (nameVal) {
+            key = Object.keys(customers).find(k => {
+                const cName = customers[k].name;
+                return cName && cName.toLowerCase() === nameVal.toLowerCase();
+            });
+        }
+    }
+
     const cityInput = document.getElementById('customer-city');
     const phoneInput = document.getElementById('customer-phone');
     const expeditionInput = document.getElementById('expedition');
-    const customers = getData('customers');
 
-    if (id && customers[id]) {
-        cityInput.value = customers[id].city;
-        phoneInput.value = customers[id].phone;
-        expeditionInput.value = customers[id].expedition || '';
+    if (key && customers[key]) {
+        cityInput.value = customers[key].city;
+        phoneInput.value = customers[key].phone;
+        expeditionInput.value = customers[key].expedition || '';
     }
 }
 
@@ -463,9 +698,12 @@ function addItemRow() {
     row.className = 'item-row';
     row.setAttribute('data-id', itemRowCounter);
     row.innerHTML = `
-        <div class="form-group">
+        <div class="form-group" style="position: relative;">
             <label>Nama Barang:</label>
-            <input list="stock-items-list" name="item-name-${itemRowCounter}" placeholder="Cari barang..." required onchange="updateItemDetails(this)" onfocus="this.value=''" autocomplete="off">
+            <div class="autocomplete-wrapper">
+                <input type="text" name="item-name-${itemRowCounter}" placeholder="Cari barang..." required autocomplete="off" class="item-search-input">
+                <div class="custom-dropdown" id="dropdown-${itemRowCounter}"></div>
+            </div>
         </div>
         <div class="form-group">
             <label>Banyaknya:</label>
@@ -483,11 +721,117 @@ function addItemRow() {
     `;
     container.appendChild(row);
 
+    // Initialize custom autocomplete
+    const input = row.querySelector('.item-search-input');
+    setupAutocomplete(input, itemRowCounter);
+
     // Hide delete button if only 1 row
     updateRemoveButtonsVisibility();
 
     calculateTotalAmount();
 }
+
+function setupAutocomplete(input, rowId) {
+    const dropdown = document.getElementById(`dropdown-${rowId}`);
+    let currentFocus = -1;
+
+    input.addEventListener('input', function () {
+        const val = this.value;
+        const stock = getData('stock');
+
+        // Sort stock A-Z
+        const sortedStock = [...stock].sort((a, b) => a.name.localeCompare(b.name));
+
+        dropdown.innerHTML = '';
+        currentFocus = -1;
+
+        if (!val) {
+            // Show all if empty (optional, or just return)
+            // sortedStock.forEach(...) 
+            // allowing empty search usually isn't desired for invoice, but let's allow it to show A-Z list if clicked
+        }
+
+        let matchCount = 0;
+        sortedStock.forEach(item => {
+            // Check if matches or if input is empty (to show all on focus)
+            if (item.name.toLowerCase().includes(val.toLowerCase()) || val === '') {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'dropdown-item';
+
+                // Highlight matching text
+                const regex = new RegExp(`(${val})`, 'gi');
+                const nameHtml = item.name.replace(regex, '<span class="match-text">$1</span>');
+
+                itemDiv.innerHTML = `<span>${nameHtml}</span>`;
+
+                itemDiv.addEventListener('click', function () {
+                    input.value = item.name;
+                    closeAllDropdowns();
+                    updateItemDetails(input); // Trigger update
+                });
+
+                dropdown.appendChild(itemDiv);
+                matchCount++;
+            }
+        });
+
+        if (matchCount > 0) {
+            dropdown.classList.add('show');
+        } else {
+            dropdown.classList.remove('show');
+        }
+    });
+
+    input.addEventListener('keydown', function (e) {
+        let x = dropdown.querySelectorAll('.dropdown-item');
+        if (e.keyCode == 40) { // Down
+            currentFocus++;
+            addActive(x);
+        } else if (e.keyCode == 38) { // Up
+            currentFocus--;
+            addActive(x);
+        } else if (e.keyCode == 13) { // Enter
+            e.preventDefault();
+            if (currentFocus > -1) {
+                if (x) x[currentFocus].click();
+            }
+        }
+    });
+
+    // Show list on focus
+    input.addEventListener('focus', function () {
+        const event = new Event('input');
+        this.dispatchEvent(event);
+    });
+
+    function addActive(x) {
+        if (!x) return false;
+        removeActive(x);
+        if (currentFocus >= x.length) currentFocus = 0;
+        if (currentFocus < 0) currentFocus = (x.length - 1);
+        x[currentFocus].classList.add('focused');
+        x[currentFocus].scrollIntoView({ block: 'nearest' });
+    }
+
+    function removeActive(x) {
+        for (let i = 0; i < x.length; i++) {
+            x[i].classList.remove('focused');
+        }
+    }
+}
+
+function closeAllDropdowns(elmnt) {
+    const dropdowns = document.getElementsByClassName('custom-dropdown');
+    for (let i = 0; i < dropdowns.length; i++) {
+        if (elmnt != dropdowns[i] && elmnt != dropdowns[i].previousElementSibling) {
+            dropdowns[i].classList.remove('show');
+        }
+    }
+}
+
+document.addEventListener('click', function (e) {
+    closeAllDropdowns(e.target);
+});
 
 function removeItemRow(button) {
     const row = button.closest('.item-row');
@@ -598,6 +942,27 @@ function processInvoice() {
         return;
     }
 
+    // --- PERSIAPAN VALIDASI STOK (Validation Stock) ---
+    // Buat map sementara untuk validasi stok tanpa mengubah data asli dulu
+    const stockData = getData('stock');
+    const tempStockMap = {};
+    stockData.forEach(item => {
+        tempStockMap[item.name] = item.stock;
+    });
+
+    // Jika sedang EDIT, kembalikan stok lama ke tempStockMap untuk validasi
+    if (editingInvoiceId !== null) {
+        const existingInvoices = getData('invoices');
+        const oldInvoice = existingInvoices.find(inv => inv.id === editingInvoiceId);
+        if (oldInvoice && oldInvoice.items) {
+            oldInvoice.items.forEach(oldItem => {
+                if (tempStockMap.hasOwnProperty(oldItem.name)) {
+                    tempStockMap[oldItem.name] += oldItem.qty;
+                }
+            });
+        }
+    }
+
     const items = [];
     const itemRows = document.querySelectorAll('.item-row');
     let grandTotal = 0;
@@ -610,9 +975,9 @@ function processInvoice() {
         const qty = parseFloat(row.querySelector('input[type="number"]').value);
         const price = parseFloat(row.getAttribute('data-price'));
 
-        const currentStock = getData('stock').find(s => s.name === itemName);
+        const currentStockItem = stockData.find(s => s.name === itemName);
 
-        if (!currentStock) {
+        if (!currentStockItem) {
             isStockSufficient = false;
             showAlert(`⚠️ Barang "${itemName}" tidak tersedia di program. Harap pilih dari daftar yang ada.`);
             return;
@@ -624,11 +989,16 @@ function processInvoice() {
             return;
         }
 
-        // Validasi Stok
-        if (currentStock && currentStock.stock < qty) {
+        // Validasi Stok menggunakan tempStockMap (Estimasi stok setelah pengembalian barang lama)
+        const availableStock = tempStockMap[itemName] || 0;
+
+        // Cek apakah stok cukup (perhitungkan juga jika item yang sama muncul multiple kali di form baru)
+        const currentUsage = (newStockUpdates[itemName] || 0) + qty;
+
+        if (availableStock < currentUsage) {
             isStockSufficient = false;
-            errorDiv.textContent = `Stock barang "${itemName}" tidak mencukupi. (Stok: ${currentStock.stock})`;
-            showAlert(`Stock barang "${itemName}" tidak mencukupi. (Stok: ${currentStock.stock})`);
+            errorDiv.textContent = `Stock barang "${itemName}" tidak mencukupi. (Tersedia: ${availableStock})`;
+            showAlert(`Stock barang "${itemName}" tidak mencukupi. (Tersedia: ${availableStock})`);
             return;
         }
 
@@ -640,11 +1010,11 @@ function processInvoice() {
             qty: qty,
             price: price,
             subtotal: subtotal,
-            unit: currentStock.unit
+            unit: currentStockItem.unit
         });
 
         // Simpan update stok untuk dieksekusi setelah semua validasi
-        newStockUpdates[itemName] = (newStockUpdates[itemName] || 0) + qty;
+        newStockUpdates[itemName] = currentUsage;
     });
 
     if (!isStockSufficient || items.length === 0) {
@@ -652,17 +1022,33 @@ function processInvoice() {
         return; // Hentikan proses jika stok tidak cukup atau data barang tidak lengkap
     }
 
-    // 3. Kurangi Stok Barang
-    let stock = getData('stock');
+    // 3. UPDATE STOK BARANG (Real Update)
+    let finalStock = getData('stock');
 
-    // Kurangi stok berdasarkan item baru
-    stock = stock.map(item => {
+    // A. Jika EDIT, kembalikan dulu stok lama ke database
+    if (editingInvoiceId !== null) {
+        const existingInvoices = getData('invoices');
+        const oldInvoice = existingInvoices.find(inv => inv.id === editingInvoiceId);
+        if (oldInvoice && oldInvoice.items) {
+            finalStock = finalStock.map(stockItem => {
+                const oldItem = oldInvoice.items.find(i => i.name === stockItem.name);
+                if (oldItem) {
+                    stockItem.stock += oldItem.qty;
+                }
+                return stockItem;
+            });
+        }
+    }
+
+    // B. Kurangi stok berdasarkan item baru (newStockUpdates)
+    finalStock = finalStock.map(item => {
         if (newStockUpdates[item.name]) {
             item.stock -= newStockUpdates[item.name];
         }
         return item;
     });
-    saveData('stock', stock);
+
+    saveData('stock', finalStock);
 
     // 4. Simpan Nota
     const invoices = getData('invoices');
@@ -717,7 +1103,9 @@ function processInvoice() {
     document.getElementById('items-list').innerHTML = ''; // Hapus semua baris item
 
     // Hide cancel edit button
-    document.getElementById('cancel-edit-button').style.display = 'none';
+    const cancelBtn = document.getElementById('cancel-edit-button');
+    if (cancelBtn) cancelBtn.style.display = 'none';
+
     document.getElementById('total-amount').textContent = 'Total: Rp 0';
     localStorage.removeItem('invoiceFormData'); // Hapus saved form data
     showScreen('home-screen');
@@ -985,7 +1373,8 @@ function downloadStockExcel() {
 
 function saveFormData() {
     const formData = {
-        customerName: document.getElementById('customer-name').value,
+        customerName: document.getElementById('customer-search-input').value, // Changed ID
+        customerKey: document.getElementById('customer-key').value, // Save Key
         expedition: document.getElementById('expedition').value,
         date: document.getElementById('invoice-date').value,
         items: []
@@ -1015,9 +1404,10 @@ function restoreFormData() {
     }
 
     const formData = JSON.parse(savedData);
-    document.getElementById('customer-name').value = formData.customerName || '';
+    document.getElementById('customer-search-input').value = formData.customerName || ''; // Changed ID
+    if (formData.customerKey) document.getElementById('customer-key').value = formData.customerKey;
     document.getElementById('expedition').value = formData.expedition || '';
-    document.getElementById('invoice-date').value = formData.date || '';
+    // document.getElementById('invoice-date').value = formData.date || ''; // Jangan restore tanggal, biarkan tanggal hari ini
 
     // Update customer details
     updateCustomerDetails();
@@ -1470,7 +1860,13 @@ function editInvoice(invoiceId) {
 
     // Populate form with invoice data
     const form = document.getElementById('invoice-form');
-    form['customer-name'].value = invoice.customer;
+    // form['customer-name'].value = invoice.customer; // OLD
+    document.getElementById('customer-search-input').value = invoice.customer; // NEW
+
+    // Try to find key if possible to populate hidden field?
+    // Not strictly necessary if updating details works by name match fallback, 
+    // but better if we can find it.
+
     document.getElementById('customer-city').value = invoice.city || '';
     document.getElementById('customer-phone').value = invoice.phone || '';
     form['expedition'].value = invoice.expedition;
@@ -1519,13 +1915,52 @@ function cancelEdit() {
         // Clear form
         const form = document.getElementById('invoice-form');
         form.reset();
+        document.getElementById('customer-search-input').value = ''; // Ensure clear
+        document.getElementById('customer-key').value = ''; // Ensure clear
         document.getElementById('items-list').innerHTML = '';
         addItemRow();
         calculateTotalAmount();
 
+        localStorage.removeItem('invoiceFormData'); // Clear draft too
+
         showAlert('Edit nota dibatalkan.');
     }, 'Ya, Batalkan');
 }
+
+function clearInvoiceForm() {
+    showConfirm('Apakah Anda yakin ingin menghapus seluruh isi data di form ini?', () => {
+        // Reset editing state if active
+        editingInvoiceId = null;
+        const cancelEditBtn = document.getElementById('cancel-edit-button');
+        if (cancelEditBtn) cancelEditBtn.style.display = 'none';
+
+        // Reset form inputs
+        const form = document.getElementById('invoice-form');
+        if (form) form.reset();
+
+        // Clear specific fields
+        const custSearch = document.getElementById('customer-search-input');
+        if (custSearch) custSearch.value = '';
+        const custKey = document.getElementById('customer-key');
+        if (custKey) custKey.value = '';
+
+        // Clear items list and add one fresh row
+        const itemsList = document.getElementById('items-list');
+        if (itemsList) {
+            itemsList.innerHTML = '';
+            if (typeof addItemRow === 'function') addItemRow();
+        }
+
+        // Recalculate total (should be 0)
+        if (typeof calculateTotalAmount === 'function') calculateTotalAmount();
+
+        // Clear local storage draft
+        localStorage.removeItem('invoiceFormData');
+
+        showAlert('Data form berhasil dibersihkan.');
+    }, 'Ya, Bersihkan');
+}
+window.clearInvoiceForm = clearInvoiceForm;
 
 function deleteInvoice(invoiceId) {
     const invoices = getData('invoices');
@@ -1828,9 +2263,53 @@ window.editInvoice = editInvoice;
 window.cancelEdit = cancelEdit;
 window.printToPDF = printToPDF;
 window.calculateTotalAmount = calculateTotalAmount;
-window.loadCustomerOptions = loadCustomerOptions;
+window.setupCustomerAutocomplete = setupCustomerAutocomplete;
 window.loadStockDatalist = loadStockDatalist;
 window.addSupplier = addSupplier;
 window.deleteSupplier = deleteSupplier;
 window.toggleSupplierSort = toggleSupplierSort;
 window.renderSupplierTable = renderSupplierTable;
+
+// --- CUSTOM SELECT LOGIC ---
+function toggleCustomSelect() {
+    const container = document.getElementById('stock-search-container');
+    container.classList.toggle('open');
+}
+
+function selectOption(value, text) {
+    // 1. Update Hidden Input Value
+    const select = document.getElementById('stock-search-mode');
+    select.value = value;
+
+    // 2. Update Display Text
+    const display = document.getElementById('custom-select-value');
+    display.textContent = text;
+
+    // 3. Update Selected Styling
+    const options = document.querySelectorAll('.custom-option');
+    options.forEach(opt => opt.classList.remove('selected'));
+
+    // Find the clicked element (naive approach or pass 'this' if onclick was inline)
+    // Since we pass string, let's find by text content
+    Array.from(options).find(opt => opt.textContent === text).classList.add('selected');
+
+    // 4. Trigger Search/Render
+    renderStockTable();
+
+    // 5. Close Dropdown
+    const container = document.getElementById('stock-search-container');
+    container.classList.remove('open');
+}
+
+// Close custom select when clicking outside
+window.addEventListener('click', function (e) {
+    const container = document.getElementById('stock-search-container');
+    if (!container) return;
+
+    if (!container.contains(e.target)) {
+        container.classList.remove('open');
+    }
+});
+
+window.toggleCustomSelect = toggleCustomSelect;
+window.selectOption = selectOption;
