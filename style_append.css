@@ -264,12 +264,24 @@
     border: none !important;
     padding: 12px 30px !important;
     font-weight: 600 !important;
+    font-size: 1.1rem !important;
     cursor: pointer;
     transition: all 0.3s ease;
     width: auto !important;
     margin: 20px auto 0 !important;
-    display: block !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1 !important;
+    min-height: 44px !important;
 }
+
+.close-button:hover {
+    background: var(--primary-dark) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 15px rgba(67, 97, 238, 0.4);
+}
+
 
 .modal-body {
     padding: 0 !important;
