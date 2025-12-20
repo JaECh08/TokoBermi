@@ -1563,7 +1563,8 @@ function renderCustomerTable() {
     const tbody = document.getElementById('customer-table').querySelector('tbody');
     tbody.innerHTML = '';
 
-    const searchValue = document.getElementById('customer-search-input') ? document.getElementById('customer-search-input').value.toLowerCase() : '';
+    const searchValue = document.getElementById('customer-table-search-input') ? document.getElementById('customer-table-search-input').value.toLowerCase() : '';
+
 
     // Convert object to array for sorting/filtering
     let customerList = [];
@@ -1597,11 +1598,62 @@ function renderCustomerTable() {
         const displayCity = customer.city || "";
         const displayPhone = customer.phone || "";
 
-        row.insertCell().textContent = displayName;
-        row.insertCell().textContent = displayCity;
-        row.insertCell().textContent = displayPhone;
-        row.insertCell().textContent = customer.expedition || '';
-        row.insertCell().textContent = customer.note || '';
+        // Nama Pelanggan - editable
+        const nameCell = row.insertCell();
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = displayName;
+        nameSpan.setAttribute('data-field', 'name');
+        nameSpan.setAttribute('data-key', customer.key);
+        nameSpan.setAttribute('data-editable', 'true');
+        nameSpan.style.cursor = 'pointer';
+        nameSpan.onclick = function () { makeCustomerCellEditable(this); };
+        nameCell.appendChild(nameSpan);
+
+        // Kota - editable
+        const cityCell = row.insertCell();
+        const citySpan = document.createElement('span');
+        citySpan.textContent = displayCity;
+        citySpan.setAttribute('data-field', 'city');
+        citySpan.setAttribute('data-key', customer.key);
+        citySpan.setAttribute('data-editable', 'true');
+        citySpan.style.cursor = 'pointer';
+        citySpan.onclick = function () { makeCustomerCellEditable(this); };
+        cityCell.appendChild(citySpan);
+
+        // No. HP - editable
+        const phoneCell = row.insertCell();
+        const phoneSpan = document.createElement('span');
+        phoneSpan.textContent = displayPhone;
+        phoneSpan.setAttribute('data-field', 'phone');
+        phoneSpan.setAttribute('data-key', customer.key);
+        phoneSpan.setAttribute('data-editable', 'true');
+        phoneSpan.style.cursor = 'pointer';
+        phoneSpan.onclick = function () { makeCustomerCellEditable(this); };
+        phoneCell.appendChild(phoneSpan);
+
+        // Ekspedisi - editable
+        const expeditionCell = row.insertCell();
+        const expeditionSpan = document.createElement('span');
+        expeditionSpan.textContent = customer.expedition || '';
+        expeditionSpan.setAttribute('data-field', 'expedition');
+        expeditionSpan.setAttribute('data-key', customer.key);
+        expeditionSpan.setAttribute('data-editable', 'true');
+        expeditionSpan.style.cursor = 'pointer';
+        expeditionSpan.onclick = function () { makeCustomerCellEditable(this); };
+        expeditionCell.appendChild(expeditionSpan);
+
+        // Catatan - editable
+        const noteCell = row.insertCell();
+        const noteSpan = document.createElement('span');
+        noteSpan.textContent = customer.note || '';
+        noteSpan.setAttribute('data-field', 'note');
+        noteSpan.setAttribute('data-key', customer.key);
+        noteSpan.setAttribute('data-editable', 'true');
+        noteSpan.style.cursor = 'pointer';
+        noteSpan.onclick = function () { makeCustomerCellEditable(this); };
+        noteCell.appendChild(noteSpan);
+
+        // Aksi - tidak editable
         row.insertCell().innerHTML = `<button onclick="deleteCustomer('${customer.key}')" class="delete-button">Hapus</button>`;
     });
 }
@@ -1657,6 +1709,68 @@ function deleteCustomer(key) {
     }, "Ya, Hapus");
 }
 
+// Fungsi untuk membuat cell customer bisa diedit
+let isCustomerSaving = false;
+
+function makeCustomerCellEditable(span) {
+    if (isCustomerSaving) return;
+
+    const field = span.getAttribute('data-field');
+    const key = span.getAttribute('data-key');
+    const currentValue = span.textContent;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentValue;
+    input.style.width = '100%';
+    input.style.boxSizing = 'border-box';
+
+    span.parentElement.replaceChild(input, span);
+    input.focus();
+    input.select();
+
+    const saveChanges = () => {
+        if (isCustomerSaving) return;
+        isCustomerSaving = true;
+
+        let newValue = input.value.trim();
+
+        let customers = getData('customers');
+
+        // Update the field
+        if (customers[key]) {
+            customers[key][field] = newValue;
+            saveData('customers', customers);
+        }
+
+        // Replace input with span
+        if (input.parentElement) {
+            const newSpan = document.createElement('span');
+            newSpan.setAttribute('data-field', field);
+            newSpan.setAttribute('data-key', key);
+            newSpan.setAttribute('data-editable', 'true');
+            newSpan.style.cursor = 'pointer';
+            newSpan.textContent = newValue;
+            newSpan.onclick = function () { makeCustomerCellEditable(this); };
+
+            input.parentElement.replaceChild(newSpan, input);
+        }
+
+        // Re-render table
+        renderCustomerTable();
+        isCustomerSaving = false;
+    };
+
+    input.addEventListener('blur', saveChanges);
+    input.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        }
+    });
+}
+
+
 // --- FUNGSI DATA SUPPLIER ---
 
 function toggleSupplierSort() {
@@ -1704,10 +1818,51 @@ function renderSupplierTable() {
         const row = tbody.insertRow();
         const displayName = supplier.name || supplier.key.split(' (')[0];
 
-        row.insertCell().textContent = displayName;
-        row.insertCell().textContent = supplier.phone || "";
-        row.insertCell().textContent = supplier.address || "";
-        row.insertCell().textContent = supplier.note || '';
+        // Nama Supplier - editable
+        const nameCell = row.insertCell();
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = displayName;
+        nameSpan.setAttribute('data-field', 'name');
+        nameSpan.setAttribute('data-key', supplier.key);
+        nameSpan.setAttribute('data-editable', 'true');
+        nameSpan.style.cursor = 'pointer';
+        nameSpan.onclick = function () { makeSupplierCellEditable(this); };
+        nameCell.appendChild(nameSpan);
+
+        // No. HP - editable
+        const phoneCell = row.insertCell();
+        const phoneSpan = document.createElement('span');
+        phoneSpan.textContent = supplier.phone || "";
+        phoneSpan.setAttribute('data-field', 'phone');
+        phoneSpan.setAttribute('data-key', supplier.key);
+        phoneSpan.setAttribute('data-editable', 'true');
+        phoneSpan.style.cursor = 'pointer';
+        phoneSpan.onclick = function () { makeSupplierCellEditable(this); };
+        phoneCell.appendChild(phoneSpan);
+
+        // Alamat - editable
+        const addressCell = row.insertCell();
+        const addressSpan = document.createElement('span');
+        addressSpan.textContent = supplier.address || "";
+        addressSpan.setAttribute('data-field', 'address');
+        addressSpan.setAttribute('data-key', supplier.key);
+        addressSpan.setAttribute('data-editable', 'true');
+        addressSpan.style.cursor = 'pointer';
+        addressSpan.onclick = function () { makeSupplierCellEditable(this); };
+        addressCell.appendChild(addressSpan);
+
+        // Catatan - editable
+        const noteCell = row.insertCell();
+        const noteSpan = document.createElement('span');
+        noteSpan.textContent = supplier.note || '';
+        noteSpan.setAttribute('data-field', 'note');
+        noteSpan.setAttribute('data-key', supplier.key);
+        noteSpan.setAttribute('data-editable', 'true');
+        noteSpan.style.cursor = 'pointer';
+        noteSpan.onclick = function () { makeSupplierCellEditable(this); };
+        noteCell.appendChild(noteSpan);
+
+        // Aksi - tidak editable
         row.insertCell().innerHTML = `<button onclick="deleteSupplier('${supplier.key}')" class="delete-button">Hapus</button>`;
     });
 }
@@ -1756,6 +1911,68 @@ function deleteSupplier(key) {
         showAlert('Supplier berhasil dihapus!');
     }, "Ya, Hapus");
 }
+
+// Fungsi untuk membuat cell supplier bisa diedit
+let isSupplierSaving = false;
+
+function makeSupplierCellEditable(span) {
+    if (isSupplierSaving) return;
+
+    const field = span.getAttribute('data-field');
+    const key = span.getAttribute('data-key');
+    const currentValue = span.textContent;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentValue;
+    input.style.width = '100%';
+    input.style.boxSizing = 'border-box';
+
+    span.parentElement.replaceChild(input, span);
+    input.focus();
+    input.select();
+
+    const saveChanges = () => {
+        if (isSupplierSaving) return;
+        isSupplierSaving = true;
+
+        let newValue = input.value.trim();
+
+        let suppliers = getData('suppliers');
+
+        // Update the field
+        if (suppliers[key]) {
+            suppliers[key][field] = newValue;
+            saveData('suppliers', suppliers);
+        }
+
+        // Replace input with span
+        if (input.parentElement) {
+            const newSpan = document.createElement('span');
+            newSpan.setAttribute('data-field', field);
+            newSpan.setAttribute('data-key', key);
+            newSpan.setAttribute('data-editable', 'true');
+            newSpan.style.cursor = 'pointer';
+            newSpan.textContent = newValue;
+            newSpan.onclick = function () { makeSupplierCellEditable(this); };
+
+            input.parentElement.replaceChild(newSpan, input);
+        }
+
+        // Re-render table
+        renderSupplierTable();
+        isSupplierSaving = false;
+    };
+
+    input.addEventListener('blur', saveChanges);
+    input.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        }
+    });
+}
+
 
 // --- FUNGSI PRINT NOTA ---
 
