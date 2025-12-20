@@ -330,7 +330,7 @@
 
                     <div class="stock-controls" style="margin-top: 30px; margin-bottom: 20px;">
                         <div class="search-group">
-                            <input type="text" id="customer-search-input" placeholder="Cari nama pelanggan..."
+                            <input type="text" id="customer-table-search-input" placeholder="Cari nama pelanggan..."
                                 oninput="renderCustomerTable()">
                         </div>
                         <button id="customer-sort-button" onclick="toggleCustomerSort()">Abjad A-Z</button>
@@ -350,6 +350,8 @@
                         <tbody>
                         </tbody>
                     </table>
+                    <p class="note">Klik pada kolom Nama Pelanggan, Kota, No. HP, Ekspedisi, atau Catatan untuk
+                        mengedit.</p>
                 </div>
 
                 <div id="supplier-data" class="screen">
@@ -395,6 +397,7 @@
                         <tbody>
                         </tbody>
                     </table>
+                    <p class="note">Klik pada kolom Nama Supplier, No. HP, Alamat, atau Catatan untuk mengedit.</p>
                 </div>
 
                 <div id="print-invoice" class="screen">
