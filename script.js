@@ -1284,22 +1284,22 @@ function renderStockTable() {
         row.insertCell().textContent = visualIndex + 1;
 
         // Nama Barang (dapat diedit)
-        row.insertCell().innerHTML = `<span data-field="name" data-type="text" data-index="${originalIndex}" data-editable="true">${item.name}</span>`;
+        row.insertCell().innerHTML = `<span data-field="name" data-type="text" data-index="${originalIndex}" data-editable="true">${item.name || '&nbsp;'}</span>`;
 
         // Satuan (dapat diedit teks)
-        row.insertCell().innerHTML = `<span data-field="unit" data-type="text" data-index="${originalIndex}" data-editable="true">${item.unit}</span>`;
+        row.insertCell().innerHTML = `<span data-field="unit" data-type="text" data-index="${originalIndex}" data-editable="true">${item.unit || '&nbsp;'}</span>`;
 
         // Supplier (dapat diedit teks)
-        row.insertCell().innerHTML = `<span data-field="supplier" data-type="text" data-index="${originalIndex}" data-editable="true">${item.supplier}</span>`;
+        row.insertCell().innerHTML = `<span data-field="supplier" data-type="text" data-index="${originalIndex}" data-editable="true">${item.supplier || '&nbsp;'}</span>`;
 
         // Jumlah Stock (dapat diedit angka)
-        row.insertCell().innerHTML = `<span data-field="stock" data-type="number" data-index="${originalIndex}" data-editable="true">${item.stock}</span>`;
+        row.insertCell().innerHTML = `<span data-field="stock" data-type="number" data-index="${originalIndex}" data-editable="true">${(item.stock !== null && item.stock !== undefined && item.stock !== '') ? item.stock : '&nbsp;'}</span>`;
 
         // Minimum Order
-        row.insertCell().innerHTML = `<span data-field="minOrder" data-type="text" data-index="${originalIndex}" data-editable="true">${item.minOrder || ''}</span>`;
+        row.insertCell().innerHTML = `<span data-field="minOrder" data-type="text" data-index="${originalIndex}" data-editable="true">${item.minOrder || '&nbsp;'}</span>`;
 
         // Minimum Stock
-        row.insertCell().innerHTML = `<span data-field="minStock" data-type="number" data-index="${originalIndex}" data-editable="true">${item.minStock || 0}</span>`;
+        row.insertCell().innerHTML = `<span data-field="minStock" data-type="number" data-index="${originalIndex}" data-editable="true">${(item.minStock !== null && item.minStock !== undefined && item.minStock !== '') ? item.minStock : '&nbsp;'}</span>`;
 
         // HPP
         row.insertCell().innerHTML = `<span data-field="hpp" data-type="currency" data-index="${originalIndex}" data-editable="true">${formatRupiah(item.hpp)}</span>`;
@@ -1416,7 +1416,8 @@ function makeEditable(spanElement) {
             newSpan.setAttribute('data-type', type);
             newSpan.setAttribute('data-index', index);
             newSpan.setAttribute('data-editable', 'true');
-            newSpan.textContent = (type === 'currency') ? formatRupiah(newValue) : newValue;
+            const displayValue = (type === 'currency') ? formatRupiah(newValue) : newValue;
+            newSpan.textContent = (displayValue !== null && displayValue !== undefined && displayValue !== '') ? displayValue : '\u00A0';
 
             input.parentElement.replaceChild(newSpan, input);
         }
@@ -1601,7 +1602,7 @@ function renderCustomerTable() {
         // Nama Pelanggan - editable
         const nameCell = row.insertCell();
         const nameSpan = document.createElement('span');
-        nameSpan.textContent = displayName;
+        nameSpan.textContent = displayName || '\u00A0';
         nameSpan.setAttribute('data-field', 'name');
         nameSpan.setAttribute('data-key', customer.key);
         nameSpan.setAttribute('data-editable', 'true');
@@ -1612,7 +1613,7 @@ function renderCustomerTable() {
         // Kota - editable
         const cityCell = row.insertCell();
         const citySpan = document.createElement('span');
-        citySpan.textContent = displayCity;
+        citySpan.textContent = displayCity || '\u00A0';
         citySpan.setAttribute('data-field', 'city');
         citySpan.setAttribute('data-key', customer.key);
         citySpan.setAttribute('data-editable', 'true');
@@ -1623,7 +1624,7 @@ function renderCustomerTable() {
         // No. HP - editable
         const phoneCell = row.insertCell();
         const phoneSpan = document.createElement('span');
-        phoneSpan.textContent = displayPhone;
+        phoneSpan.textContent = displayPhone || '\u00A0';
         phoneSpan.setAttribute('data-field', 'phone');
         phoneSpan.setAttribute('data-key', customer.key);
         phoneSpan.setAttribute('data-editable', 'true');
@@ -1634,7 +1635,7 @@ function renderCustomerTable() {
         // Ekspedisi - editable
         const expeditionCell = row.insertCell();
         const expeditionSpan = document.createElement('span');
-        expeditionSpan.textContent = customer.expedition || '';
+        expeditionSpan.textContent = customer.expedition || '\u00A0';
         expeditionSpan.setAttribute('data-field', 'expedition');
         expeditionSpan.setAttribute('data-key', customer.key);
         expeditionSpan.setAttribute('data-editable', 'true');
@@ -1645,7 +1646,7 @@ function renderCustomerTable() {
         // Catatan - editable
         const noteCell = row.insertCell();
         const noteSpan = document.createElement('span');
-        noteSpan.textContent = customer.note || '';
+        noteSpan.textContent = customer.note || '\u00A0';
         noteSpan.setAttribute('data-field', 'note');
         noteSpan.setAttribute('data-key', customer.key);
         noteSpan.setAttribute('data-editable', 'true');
@@ -1721,7 +1722,7 @@ function makeCustomerCellEditable(span) {
 
     const input = document.createElement('input');
     input.type = 'text';
-    input.value = currentValue;
+    input.value = (currentValue === '\u00A0' || currentValue === '&nbsp;') ? '' : currentValue;
     input.style.width = '100%';
     input.style.boxSizing = 'border-box';
 
@@ -1750,7 +1751,7 @@ function makeCustomerCellEditable(span) {
             newSpan.setAttribute('data-key', key);
             newSpan.setAttribute('data-editable', 'true');
             newSpan.style.cursor = 'pointer';
-            newSpan.textContent = newValue;
+            newSpan.textContent = newValue || '\u00A0';
             newSpan.onclick = function () { makeCustomerCellEditable(this); };
 
             input.parentElement.replaceChild(newSpan, input);
@@ -1821,7 +1822,7 @@ function renderSupplierTable() {
         // Nama Supplier - editable
         const nameCell = row.insertCell();
         const nameSpan = document.createElement('span');
-        nameSpan.textContent = displayName;
+        nameSpan.textContent = displayName || '\u00A0';
         nameSpan.setAttribute('data-field', 'name');
         nameSpan.setAttribute('data-key', supplier.key);
         nameSpan.setAttribute('data-editable', 'true');
@@ -1832,7 +1833,7 @@ function renderSupplierTable() {
         // No. HP - editable
         const phoneCell = row.insertCell();
         const phoneSpan = document.createElement('span');
-        phoneSpan.textContent = supplier.phone || "";
+        phoneSpan.textContent = supplier.phone || '\u00A0';
         phoneSpan.setAttribute('data-field', 'phone');
         phoneSpan.setAttribute('data-key', supplier.key);
         phoneSpan.setAttribute('data-editable', 'true');
@@ -1843,7 +1844,7 @@ function renderSupplierTable() {
         // Alamat - editable
         const addressCell = row.insertCell();
         const addressSpan = document.createElement('span');
-        addressSpan.textContent = supplier.address || "";
+        addressSpan.textContent = supplier.address || '\u00A0';
         addressSpan.setAttribute('data-field', 'address');
         addressSpan.setAttribute('data-key', supplier.key);
         addressSpan.setAttribute('data-editable', 'true');
@@ -1854,7 +1855,7 @@ function renderSupplierTable() {
         // Catatan - editable
         const noteCell = row.insertCell();
         const noteSpan = document.createElement('span');
-        noteSpan.textContent = supplier.note || '';
+        noteSpan.textContent = supplier.note || '\u00A0';
         noteSpan.setAttribute('data-field', 'note');
         noteSpan.setAttribute('data-key', supplier.key);
         noteSpan.setAttribute('data-editable', 'true');
@@ -1924,7 +1925,7 @@ function makeSupplierCellEditable(span) {
 
     const input = document.createElement('input');
     input.type = 'text';
-    input.value = currentValue;
+    input.value = (currentValue === '\u00A0' || currentValue === '&nbsp;') ? '' : currentValue;
     input.style.width = '100%';
     input.style.boxSizing = 'border-box';
 
@@ -1953,7 +1954,7 @@ function makeSupplierCellEditable(span) {
             newSpan.setAttribute('data-key', key);
             newSpan.setAttribute('data-editable', 'true');
             newSpan.style.cursor = 'pointer';
-            newSpan.textContent = newValue;
+            newSpan.textContent = newValue || '\u00A0';
             newSpan.onclick = function () { makeSupplierCellEditable(this); };
 
             input.parentElement.replaceChild(newSpan, input);
