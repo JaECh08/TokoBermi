@@ -217,8 +217,23 @@ function showTransactionsDetail() {
     const monthlyStats = {};
 
     invoices.forEach(invoice => {
-        totalRevenue += invoice.total || 0;
-        totalItems += (invoice.items || []).reduce((sum, item) => sum + (item.qty || 0), 0);
+        // Cek apakah ada editan untuk invoice ini
+        const savedEdit = localStorage.getItem(`invoice_edit_${invoice.id}`);
+        let invoiceTotal = invoice.total || 0;
+        let invoiceItems = invoice.items || [];
+
+        if (savedEdit) {
+            try {
+                const editedInvoice = JSON.parse(savedEdit);
+                invoiceTotal = editedInvoice.total || 0;
+                invoiceItems = editedInvoice.items || [];
+            } catch (e) {
+                console.error('Error parsing invoice edit:', e);
+            }
+        }
+
+        totalRevenue += invoiceTotal;
+        totalItems += invoiceItems.reduce((sum, item) => sum + (item.qty || 0), 0);
 
         // Group by month
         const date = new Date(invoice.date.split('/').reverse().join('-'));
@@ -231,7 +246,7 @@ function showTransactionsDetail() {
             };
         }
         monthlyStats[monthKey].count++;
-        monthlyStats[monthKey].revenue += invoice.total || 0;
+        monthlyStats[monthKey].revenue += invoiceTotal;
     });
 
     // Sort invoices by date (newest first)
