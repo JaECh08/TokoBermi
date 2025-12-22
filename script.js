@@ -2401,12 +2401,22 @@ function toggleInvoiceDetail(invoiceId, itemDiv) {
 
 // Fungsi untuk mendapatkan data invoice (dari cache edit atau database asli)
 function getInvoiceData(invoiceId) {
-    // Jika ada editan sementara, gunakan itu
+    // 1. Cek localStorage dulu (editan permanen)
+    const savedEdit = localStorage.getItem(`invoice_edit_${invoiceId}`);
+    if (savedEdit) {
+        try {
+            return JSON.parse(savedEdit);
+        } catch (e) {
+            console.error('Error parsing saved invoice edit:', e);
+        }
+    }
+
+    // 2. Jika tidak ada di localStorage, cek cache sementara
     if (invoiceEditCache[invoiceId]) {
         return invoiceEditCache[invoiceId];
     }
 
-    // Jika tidak, ambil dari database dan buat copy untuk cache
+    // 3. Jika tidak ada, ambil dari database dan buat copy untuk cache
     const invoices = getData('invoices');
     const invoice = invoices.find(inv => inv.id === invoiceId);
     if (invoice) {
@@ -2491,6 +2501,9 @@ function makeInvoiceFieldEditable(element, invoiceId, field, itemIndex = null) {
             }
         }
 
+        // Simpan ke localStorage agar permanen
+        localStorage.setItem(`invoice_edit_${invoiceId}`, JSON.stringify(cachedInvoice));
+
         // Display formatted value
         if (field === 'price' || field === 'subtotal') {
             span.textContent = formatRupiah(parseInt(newValue.replace(/\./g, '')) || 0);
@@ -2503,6 +2516,13 @@ function makeInvoiceFieldEditable(element, invoiceId, field, itemIndex = null) {
 
         // Refresh display to show updated totals
         refreshInvoiceDisplay(invoiceId);
+
+        // Update dashboard stats jika ada perubahan harga
+        if (field === 'price' || field === 'qty' || field === 'subtotal') {
+            if (typeof updateDashboardStats === 'function') {
+                updateDashboardStats();
+            }
+        }
     };
 
     input.addEventListener('blur', saveEdit);
@@ -2583,8 +2603,14 @@ ${invoice.items.map((item, index) => `
 <strong>TOTAL AKHIR:</strong> <span style="color: #059669; font-weight: bold;">${formatRupiah(invoice.total)}</span>
 </div>
 
+${localStorage.getItem(`invoice_edit_${invoiceId}`) ? `
+<div style="margin-top: 10px; padding: 10px; background: #dcfce7; border-left: 4px solid #16a34a; border-radius: 4px;">
+<small><strong>✅ Nota ini sudah diedit</strong> - Data yang ditampilkan berbeda dari database asli. <button onclick="resetInvoiceToOriginal(${invoiceId})" style="margin-left: 10px; padding: 4px 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Reset ke Data Asli</button></small>
+</div>
+` : ''}
+
 <div class="tips-box" style="margin-top: 10px; padding: 10px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
-<small><strong>💡 Tips:</strong> Double-click pada data apapun untuk mengeditnya. Perubahan hanya berlaku untuk print PDF, tidak mengubah data asli di database.</small>
+<small><strong>💡 Tips:</strong> Double-click pada data apapun untuk mengeditnya. Perubahan tersimpan permanen di browser ini dan berlaku untuk print PDF, tidak mengubah data asli di database.</small>
 </div>
 </div>
 `;
@@ -2608,6 +2634,31 @@ ${invoice.items.map((item, index) =>
 
 TOTAL AKHIR: ${formatRupiah(invoice.total)}
 `;
+}
+
+// Fungsi untuk reset invoice ke data asli
+function resetInvoiceToOriginal(invoiceId) {
+    showConfirm(
+        'Apakah Anda yakin ingin mengembalikan nota ini ke data asli? Semua editan akan hilang.',
+        () => {
+            // Hapus dari localStorage
+            localStorage.removeItem(`invoice_edit_${invoiceId}`);
+
+            // Hapus dari cache
+            delete invoiceEditCache[invoiceId];
+
+            // Refresh tampilan
+            refreshInvoiceDisplay(invoiceId);
+
+            // Update dashboard
+            if (typeof updateDashboardStats === 'function') {
+                updateDashboardStats();
+            }
+
+            showAlert('Nota berhasil dikembalikan ke data asli!');
+        },
+        'Ya, Reset'
+    );
 }
 
 
@@ -2836,6 +2887,7 @@ window.renderSupplierTable = renderSupplierTable;
 window.makeInvoiceFieldEditable = makeInvoiceFieldEditable;
 window.getInvoiceData = getInvoiceData;
 window.generateEditableInvoiceContent = generateEditableInvoiceContent;
+window.resetInvoiceToOriginal = resetInvoiceToOriginal;
 
 // --- CUSTOM SELECT LOGIC ---
 function toggleCustomSelect() {
