@@ -1295,11 +1295,11 @@ function renderStockTable() {
         // Jumlah Stock (dapat diedit angka)
         row.insertCell().innerHTML = `<span data-field="stock" data-type="number" data-index="${originalIndex}" data-editable="true">${(item.stock !== null && item.stock !== undefined && item.stock !== '') ? item.stock : '&nbsp;'}</span>`;
 
-        // Minimum Order
-        row.insertCell().innerHTML = `<span data-field="minOrder" data-type="text" data-index="${originalIndex}" data-editable="true">${item.minOrder || '&nbsp;'}</span>`;
-
         // Minimum Stock
         row.insertCell().innerHTML = `<span data-field="minStock" data-type="number" data-index="${originalIndex}" data-editable="true">${(item.minStock !== null && item.minStock !== undefined && item.minStock !== '') ? item.minStock : '&nbsp;'}</span>`;
+
+        // Minimum Order
+        row.insertCell().innerHTML = `<span data-field="minOrder" data-type="text" data-index="${originalIndex}" data-editable="true">${item.minOrder || '&nbsp;'}</span>`;
 
         // HPP
         row.insertCell().innerHTML = `<span data-field="hpp" data-type="currency" data-index="${originalIndex}" data-editable="true">${formatRupiah(item.hpp)}</span>`;
@@ -2373,8 +2373,9 @@ function toggleInvoiceDetail(invoiceId, itemDiv) {
     document.querySelectorAll('.invoice-detail').forEach(div => div.style.display = 'none');
 
     if (!isVisible) {
-        const invoices = getData('invoices');
-        const invoice = invoices.find(inv => inv.id === invoiceId);
+        // PERBAIKAN: Gunakan getInvoiceData untuk load editan dari localStorage
+        const invoice = getInvoiceData(invoiceId);
+        console.log(`🔍 toggleInvoiceDetail untuk invoice ${invoiceId}:`, invoice);
         const detailDiv = itemDiv.querySelector('.invoice-detail');
 
         if (!invoice) {
@@ -2405,7 +2406,9 @@ function getInvoiceData(invoiceId) {
     const savedEdit = localStorage.getItem(`invoice_edit_${invoiceId}`);
     if (savedEdit) {
         try {
-            return JSON.parse(savedEdit);
+            const parsed = JSON.parse(savedEdit);
+            console.log(`📦 Load dari localStorage untuk invoice ${invoiceId}:`, parsed);
+            return parsed;
         } catch (e) {
             console.error('Error parsing saved invoice edit:', e);
         }
@@ -2413,6 +2416,7 @@ function getInvoiceData(invoiceId) {
 
     // 2. Jika tidak ada di localStorage, cek cache sementara
     if (invoiceEditCache[invoiceId]) {
+        console.log(`💾 Load dari cache untuk invoice ${invoiceId}`);
         return invoiceEditCache[invoiceId];
     }
 
@@ -2422,8 +2426,10 @@ function getInvoiceData(invoiceId) {
     if (invoice) {
         // Deep copy agar tidak mengubah data asli
         invoiceEditCache[invoiceId] = JSON.parse(JSON.stringify(invoice));
+        console.log(`🗄️ Load dari database untuk invoice ${invoiceId}`);
         return invoiceEditCache[invoiceId];
     }
+    console.warn(`⚠️ Invoice ${invoiceId} tidak ditemukan`);
     return null;
 }
 
@@ -2502,7 +2508,12 @@ function makeInvoiceFieldEditable(element, invoiceId, field, itemIndex = null) {
         }
 
         // Simpan ke localStorage agar permanen
-        localStorage.setItem(`invoice_edit_${invoiceId}`, JSON.stringify(cachedInvoice));
+        if (cachedInvoice) {
+            localStorage.setItem(`invoice_edit_${invoiceId}`, JSON.stringify(cachedInvoice));
+            console.log(`✅ Editan tersimpan untuk invoice ${invoiceId}:`, cachedInvoice);
+        } else {
+            console.error('❌ cachedInvoice is null, tidak bisa simpan ke localStorage');
+        }
 
         // Display formatted value
         if (field === 'price' || field === 'subtotal') {
