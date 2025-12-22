@@ -2422,3 +2422,21 @@ body.dark-mode .tips-box {
 body.dark-mode .tips-box strong {
     color: #93c5fd;
 }
+
+/* Edited invoice notice box styling */
+body.dark-mode .detail-view>div>div[style*="background: #dcfce7"] {
+    background: #065f46 !important;
+    border-left-color: #10b981 !important;
+    color: #d1fae5 !important;
+}
+
+body.dark-mode .detail-view>div>div[style*="background: #dcfce7"] strong {
+    color: #6ee7b7 !important;
+}
+
+body.dark-mode .detail-view>div>div[style*="background: #dcfce7"] button {
+    background: #dc2626 !important;
+    color: white !important;
+}
+
+
