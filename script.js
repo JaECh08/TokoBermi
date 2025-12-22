@@ -2033,8 +2033,8 @@ function renderInvoicesList() {
 function printToPDF(invoiceId) {
     const { jsPDF } = window.jspdf;
 
-    const invoices = getData('invoices') || [];
-    const invoice = invoices.find(inv => inv.id === invoiceId);
+    // Gunakan data dari cache edit jika ada, jika tidak gunakan data asli
+    let invoice = getInvoiceData(invoiceId);
 
     if (!invoice) {
         alert("Data nota tidak ditemukan!");
@@ -2362,6 +2362,9 @@ function deleteInvoice(invoiceId) {
 }
 
 
+// Global object untuk menyimpan editan sementara nota (tidak mempengaruhi database)
+let invoiceEditCache = {};
+
 function toggleInvoiceDetail(invoiceId, itemDiv) {
     const detailDiv = itemDiv.querySelector('.invoice-detail');
     const isVisible = detailDiv.style.display !== 'none';
@@ -2379,16 +2382,12 @@ function toggleInvoiceDetail(invoiceId, itemDiv) {
             return;
         }
 
-        // Generate content
-        let detailContent = generateInvoiceContent(invoice);
-
-        // Di dalam function showInvoiceDetail(invoiceId) di script.js
-
-        // ... (kode sebelumnya tetap sama)
+        // Generate editable content
+        let detailContent = generateEditableInvoiceContent(invoice);
 
         detailDiv.innerHTML = `
     <div class="detail-view">
-        <pre>${detailContent}</pre>
+        ${detailContent}
         <div class="detail-buttons">
             <button class="print-button" onclick="printToPDF(${invoice.id})">Download Nota PDF</button>
             <button class="edit-button" onclick="editInvoice(${invoice.id})">Edit Nota</button>
@@ -2398,6 +2397,197 @@ function toggleInvoiceDetail(invoiceId, itemDiv) {
 `;
         detailDiv.style.display = 'block';
     }
+}
+
+// Fungsi untuk mendapatkan data invoice (dari cache edit atau database asli)
+function getInvoiceData(invoiceId) {
+    // Jika ada editan sementara, gunakan itu
+    if (invoiceEditCache[invoiceId]) {
+        return invoiceEditCache[invoiceId];
+    }
+
+    // Jika tidak, ambil dari database dan buat copy untuk cache
+    const invoices = getData('invoices');
+    const invoice = invoices.find(inv => inv.id === invoiceId);
+    if (invoice) {
+        // Deep copy agar tidak mengubah data asli
+        invoiceEditCache[invoiceId] = JSON.parse(JSON.stringify(invoice));
+        return invoiceEditCache[invoiceId];
+    }
+    return null;
+}
+
+// Fungsi untuk membuat field editable dengan double-click
+function makeInvoiceFieldEditable(element, invoiceId, field, itemIndex = null) {
+    const currentValue = element.textContent.trim();
+
+    const input = document.createElement('input');
+    input.type = 'text';
+
+    // Untuk field harga, hilangkan format Rupiah agar lebih mudah diedit
+    if (field === 'price' || field === 'subtotal') {
+        // Hapus "Rp", titik, dan spasi
+        input.value = currentValue.replace(/Rp\s*/g, '').replace(/\./g, '').trim();
+    } else {
+        input.value = currentValue;
+    }
+    input.style.width = '100%';
+    input.style.padding = '2px 5px';
+    input.style.border = '2px solid #3b82f6';
+    input.style.borderRadius = '3px';
+    input.style.fontSize = 'inherit';
+    input.style.fontFamily = 'monospace';
+
+    element.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const saveEdit = () => {
+        const newValue = input.value.trim();
+        const span = document.createElement('span');
+        span.className = 'editable-field';
+        span.style.cursor = 'pointer';
+        span.style.padding = '2px 5px';
+        span.style.borderRadius = '3px';
+        span.title = 'Double-click untuk edit';
+
+        // Update cache
+        const cachedInvoice = getInvoiceData(invoiceId);
+        if (cachedInvoice) {
+            if (itemIndex !== null) {
+                // Edit item field
+                if (field === 'name') {
+                    cachedInvoice.items[itemIndex].name = newValue;
+                } else if (field === 'qty') {
+                    const qty = parseInt(newValue) || 0;
+                    cachedInvoice.items[itemIndex].qty = qty;
+                    cachedInvoice.items[itemIndex].subtotal = qty * cachedInvoice.items[itemIndex].price;
+                } else if (field === 'price') {
+                    // Hapus "Rp", spasi, dan titik, lalu parse
+                    const price = parseInt(newValue.replace(/Rp\s*/g, '').replace(/\./g, '').replace(/\s/g, '')) || 0;
+                    cachedInvoice.items[itemIndex].price = price;
+                    cachedInvoice.items[itemIndex].subtotal = price * cachedInvoice.items[itemIndex].qty;
+                } else if (field === 'subtotal') {
+                    // Hapus "Rp", spasi, dan titik, lalu parse
+                    const subtotal = parseInt(newValue.replace(/Rp\s*/g, '').replace(/\./g, '').replace(/\s/g, '')) || 0;
+                    cachedInvoice.items[itemIndex].subtotal = subtotal;
+                }
+
+                // Recalculate total
+                cachedInvoice.total = cachedInvoice.items.reduce((sum, item) => sum + item.subtotal, 0);
+            } else {
+                // Edit customer field
+                if (field === 'customer') {
+                    cachedInvoice.customer = newValue;
+                } else if (field === 'city') {
+                    cachedInvoice.city = newValue;
+                } else if (field === 'phone') {
+                    cachedInvoice.phone = newValue;
+                } else if (field === 'expedition') {
+                    cachedInvoice.expedition = newValue;
+                } else if (field === 'date') {
+                    cachedInvoice.date = newValue;
+                }
+            }
+        }
+
+        // Display formatted value
+        if (field === 'price' || field === 'subtotal') {
+            span.textContent = formatRupiah(parseInt(newValue.replace(/\./g, '')) || 0);
+        } else {
+            span.textContent = newValue;
+        }
+
+        span.ondblclick = () => makeInvoiceFieldEditable(span, invoiceId, field, itemIndex);
+        input.replaceWith(span);
+
+        // Refresh display to show updated totals
+        refreshInvoiceDisplay(invoiceId);
+    };
+
+    input.addEventListener('blur', saveEdit);
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        }
+    });
+}
+
+// Fungsi untuk refresh tampilan invoice setelah edit
+function refreshInvoiceDisplay(invoiceId) {
+    // Cari detail div yang sedang terbuka untuk invoice ini
+    const allDetailDivs = document.querySelectorAll('.invoice-detail');
+
+    allDetailDivs.forEach(detailDiv => {
+        // Cek apakah detail div ini sedang ditampilkan
+        if (detailDiv.style.display !== 'none' && detailDiv.innerHTML.includes(`printToPDF(${invoiceId})`)) {
+            // Re-render the detail dengan data terbaru
+            const cachedInvoice = getInvoiceData(invoiceId);
+            if (cachedInvoice) {
+                let detailContent = generateEditableInvoiceContent(cachedInvoice);
+                detailDiv.innerHTML = `
+                    <div class="detail-view">
+                        ${detailContent}
+                        <div class="detail-buttons">
+                            <button class="print-button" onclick="printToPDF(${invoiceId})">Download Nota PDF</button>
+                            <button class="edit-button" onclick="editInvoice(${invoiceId})">Edit Nota</button>
+                            <button class="delete-button" onclick="deleteInvoice(${invoiceId})">Hapus Nota</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    });
+}
+
+// Generate konten invoice yang bisa di-edit
+function generateEditableInvoiceContent(invoice) {
+    const invoiceId = invoice.id;
+
+    return `
+<div style="font-family: monospace; white-space: pre-wrap; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+<strong>Tanggal:</strong> <span class="editable-field" style="cursor: pointer; padding: 2px 5px; border-radius: 3px;" title="Double-click untuk edit" ondblclick="makeInvoiceFieldEditable(this, ${invoiceId}, 'date')">${invoice.date}</span>
+---
+<strong>DATA PEMESAN</strong>
+<strong>Nama:</strong> <span class="editable-field" style="cursor: pointer; padding: 2px 5px; border-radius: 3px;" title="Double-click untuk edit" ondblclick="makeInvoiceFieldEditable(this, ${invoiceId}, 'customer')">${invoice.customer}</span>
+<strong>Kota:</strong> <span class="editable-field" style="cursor: pointer; padding: 2px 5px; border-radius: 3px;" title="Double-click untuk edit" ondblclick="makeInvoiceFieldEditable(this, ${invoiceId}, 'city')">${invoice.city}</span>
+<strong>No. HP:</strong> <span class="editable-field" style="cursor: pointer; padding: 2px 5px; border-radius: 3px;" title="Double-click untuk edit" ondblclick="makeInvoiceFieldEditable(this, ${invoiceId}, 'phone')">${invoice.phone}</span>
+<strong>Ekspedisi:</strong> <span class="editable-field" style="cursor: pointer; padding: 2px 5px; border-radius: 3px;" title="Double-click untuk edit" ondblclick="makeInvoiceFieldEditable(this, ${invoiceId}, 'expedition')">${invoice.expedition}</span>
+
+<strong>DETAIL BARANG</strong>
+<table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+<thead>
+<tr style="background: #e2e8f0;">
+<th style="border: 1px solid #cbd5e0; padding: 8px; text-align: left;">No</th>
+<th style="border: 1px solid #cbd5e0; padding: 8px; text-align: left;">Nama Barang</th>
+<th style="border: 1px solid #cbd5e0; padding: 8px; text-align: left;">Qty</th>
+<th style="border: 1px solid #cbd5e0; padding: 8px; text-align: right;">Harga Satuan</th>
+<th style="border: 1px solid #cbd5e0; padding: 8px; text-align: right;">Jumlah</th>
+</tr>
+</thead>
+<tbody>
+${invoice.items.map((item, index) => `
+<tr>
+<td style="border: 1px solid #cbd5e0; padding: 8px;">${index + 1}</td>
+<td style="border: 1px solid #cbd5e0; padding: 8px;"><span class="editable-field" style="cursor: pointer; padding: 2px 5px; border-radius: 3px;" title="Double-click untuk edit" ondblclick="makeInvoiceFieldEditable(this, ${invoiceId}, 'name', ${index})">${item.name}</span></td>
+<td style="border: 1px solid #cbd5e0; padding: 8px;"><span class="editable-field" style="cursor: pointer; padding: 2px 5px; border-radius: 3px;" title="Double-click untuk edit" ondblclick="makeInvoiceFieldEditable(this, ${invoiceId}, 'qty', ${index})">${item.qty}</span></td>
+<td style="border: 1px solid #cbd5e0; padding: 8px; text-align: right;"><span class="editable-field" style="cursor: pointer; padding: 2px 5px; border-radius: 3px;" title="Double-click untuk edit" ondblclick="makeInvoiceFieldEditable(this, ${invoiceId}, 'price', ${index})">${formatRupiah(item.price)}</span></td>
+<td style="border: 1px solid #cbd5e0; padding: 8px; text-align: right;"><span class="editable-field" style="cursor: pointer; padding: 2px 5px; border-radius: 3px;" title="Double-click untuk edit" ondblclick="makeInvoiceFieldEditable(this, ${invoiceId}, 'subtotal', ${index})">${formatRupiah(item.subtotal)}</span></td>
+</tr>
+`).join('')}
+</tbody>
+</table>
+
+<div style="margin-top: 15px; font-size: 1.1em;">
+<strong>TOTAL AKHIR:</strong> <span style="color: #059669; font-weight: bold;">${formatRupiah(invoice.total)}</span>
+</div>
+
+<div class="tips-box" style="margin-top: 10px; padding: 10px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+<small><strong>💡 Tips:</strong> Double-click pada data apapun untuk mengeditnya. Perubahan hanya berlaku untuk print PDF, tidak mengubah data asli di database.</small>
+</div>
+</div>
+`;
 }
 
 function generateInvoiceContent(invoice) {
@@ -2643,6 +2833,9 @@ window.addSupplier = addSupplier;
 window.deleteSupplier = deleteSupplier;
 window.toggleSupplierSort = toggleSupplierSort;
 window.renderSupplierTable = renderSupplierTable;
+window.makeInvoiceFieldEditable = makeInvoiceFieldEditable;
+window.getInvoiceData = getInvoiceData;
+window.generateEditableInvoiceContent = generateEditableInvoiceContent;
 
 // --- CUSTOM SELECT LOGIC ---
 function toggleCustomSelect() {
