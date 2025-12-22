@@ -2351,3 +2351,74 @@ body.dark-mode .detail-list-label {
 body.dark-mode .detail-list-value {
     color: #f1f5f9;
 }
+
+/* --- EDITABLE INVOICE FIELDS --- */
+.editable-field {
+    transition: all 0.2s ease;
+    display: inline-block;
+}
+
+.editable-field:hover {
+    background-color: rgba(67, 97, 238, 0.1);
+    border-radius: 3px;
+    box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
+}
+
+body.dark-mode .editable-field:hover {
+    background-color: rgba(96, 165, 250, 0.15);
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
+}
+
+/* Styling untuk tabel detail barang yang editable */
+.detail-view table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.detail-view table th,
+.detail-view table td {
+    padding: 8px;
+    border: 1px solid #cbd5e0;
+}
+
+.detail-view table thead tr {
+    background: #e2e8f0;
+}
+
+body.dark-mode .detail-view table th,
+body.dark-mode .detail-view table td {
+    border-color: #334155;
+}
+
+body.dark-mode .detail-view table thead tr {
+    background: #1e3a8a;
+}
+
+body.dark-mode .detail-view>div {
+    background: #1e293b !important;
+    color: #f1f5f9;
+}
+
+body.dark-mode .detail-view strong {
+    color: #e2e8f0;
+}
+
+
+body.dark-mode .detail-view .editable-field {
+    color: #f1f5f9;
+}
+
+/* Tips box styling */
+.tips-box {
+    color: #92400e;
+}
+
+body.dark-mode .tips-box {
+    background: #1e3a8a !important;
+    border-left-color: #60a5fa !important;
+    color: #e0f2fe !important;
+}
+
+body.dark-mode .tips-box strong {
+    color: #93c5fd;
+}
