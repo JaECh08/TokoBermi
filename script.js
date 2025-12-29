@@ -44,7 +44,9 @@ let dbData = {
     customers: {},
     suppliers: {},
     stock: [],
-    invoices: []
+    invoices: [],
+    incoming: [],
+    outgoing: []
 };
 
 // Status Login
@@ -197,6 +199,18 @@ function startDataSync() {
         dbData.suppliers = snapshot.val() || {};
         syncUI();
     });
+
+    // Sync Incoming Goods
+    db.ref('incoming').on('value', (snapshot) => {
+        dbData.incoming = snapshot.val() || [];
+        syncUI();
+    });
+
+    // Sync Outgoing Goods
+    db.ref('outgoing').on('value', (snapshot) => {
+        dbData.outgoing = snapshot.val() || [];
+        syncUI();
+    });
 }
 
 function syncUI() {
@@ -214,6 +228,8 @@ function syncUI() {
     if (activeScreen.id === 'home-screen') {
         updateDashboardStats();
     }
+    if (activeScreen.id === 'incoming-goods') renderIncomingTable();
+    if (activeScreen.id === 'outgoing-goods') renderOutgoingTable();
 }
 
 // --- UTILITY FUNCTIONS (Adapted for Firebase) ---
@@ -315,6 +331,16 @@ async function initializeData() {
     const supSnap = await db.ref('suppliers').once('value');
     if (!supSnap.exists()) {
         saveData('suppliers', {});
+    }
+
+    const inSnap = await db.ref('incoming').once('value');
+    if (!inSnap.exists()) {
+        saveData('incoming', []);
+    }
+
+    const outSnap = await db.ref('outgoing').once('value');
+    if (!outSnap.exists()) {
+        saveData('outgoing', []);
     }
 }
 
@@ -455,6 +481,16 @@ function showScreen(screenId) {
         renderInvoicesList();
     } else if (screenId === 'home-screen') {
         updateDashboardStats();
+    } else if (screenId === 'incoming-goods') {
+        document.getElementById('incoming-date').valueAsDate = new Date();
+        setupGeneralAutocomplete('incoming-item-name', 'incoming-item-dropdown', (item) => {
+            document.getElementById('incoming-supplier').value = item.supplier || '';
+        });
+        renderIncomingTable();
+    } else if (screenId === 'outgoing-goods') {
+        document.getElementById('outgoing-date').valueAsDate = new Date();
+        setupGeneralAutocomplete('outgoing-item-name', 'outgoing-item-dropdown');
+        renderOutgoingTable();
     }
 }
 
@@ -2943,3 +2979,311 @@ window.addEventListener('click', function (e) {
 
 window.toggleCustomSelect = toggleCustomSelect;
 window.selectOption = selectOption;
+
+// --- LOGIC BARANG MASUK & KELUAR ---
+
+function setupGeneralAutocomplete(inputId, dropdownId, onSelect) {
+    const input = document.getElementById(inputId);
+    const dropdown = document.getElementById(dropdownId);
+
+    if (!input || !dropdown) return;
+
+    // Use cloneNode to remove old event listeners if any, to prevent duplicates on navigation
+    // Actually simplicity is better: just ensure we don't double bind? 
+    // showScreen calls this every time. Let's make sure we handle it.
+    // A simple way is to tag it.
+    if (input.dataset.autocompleteBound) return;
+    input.dataset.autocompleteBound = "true";
+
+    input.addEventListener('input', function () {
+        const val = this.value;
+        const stock = getData('stock');
+        const sortedStock = [...stock].sort((a, b) => a.name.localeCompare(b.name));
+
+        dropdown.innerHTML = '';
+        if (!val) {
+            dropdown.classList.remove('show');
+            return;
+        }
+
+        let matchCount = 0;
+        sortedStock.forEach(item => {
+            if (item.name.toLowerCase().includes(val.toLowerCase())) {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'dropdown-item';
+                const regex = new RegExp(`(${val})`, 'gi');
+                itemDiv.innerHTML = `<span>${item.name.replace(regex, '<span class="match-text">$1</span>')}</span>`;
+
+                itemDiv.addEventListener('click', function () {
+                    input.value = item.name;
+                    dropdown.classList.remove('show');
+                    if (onSelect) onSelect(item);
+                });
+                dropdown.appendChild(itemDiv);
+                matchCount++;
+            }
+        });
+
+        if (matchCount > 0) dropdown.classList.add('show');
+        else dropdown.classList.remove('show');
+    });
+
+    // Close on click outside
+    document.addEventListener('click', function (e) {
+        if (e.target !== input && e.target !== dropdown) {
+            dropdown.classList.remove('show');
+        }
+    });
+}
+
+function addIncomingGoods(event) {
+    event.preventDefault();
+
+    const date = document.getElementById('incoming-date').value;
+    const name = document.getElementById('incoming-item-name').value;
+    const supplier = document.getElementById('incoming-supplier').value;
+    const qty = parseFloat(document.getElementById('incoming-qty').value);
+    const payment = parseFloat(document.getElementById('incoming-payment').value);
+
+    if (!name || isNaN(qty) || isNaN(payment)) {
+        showAlert("Mohon lengkapi data dengan benar.");
+        return;
+    }
+
+    // 1. Update Stock
+    const stock = getData('stock');
+    const itemIndex = stock.findIndex(item => item.name === name);
+
+    if (itemIndex === -1) {
+        showAlert("Barang tidak ditemukan di database Stock Barang via Nama.");
+        return;
+    }
+
+    // Update stock quantity
+    stock[itemIndex].stock = (parseFloat(stock[itemIndex].stock) || 0) + qty;
+
+    // Save stock to DB
+    saveData('stock', stock);
+
+    // 2. Add to History
+    const history = getData('incoming') || [];
+    history.push({
+        id: Date.now(),
+        date: date,
+        name: name,
+        supplier: supplier,
+        qty: qty,
+        payment: payment
+    });
+
+    saveData('incoming', history);
+
+    showAlert("Barang Masuk berhasil disimpan & Stock bertambah!");
+    document.getElementById('incoming-form').reset();
+    document.getElementById('incoming-date').valueAsDate = new Date(); // Reset date to today
+    renderIncomingTable();
+}
+
+function addOutgoingGoods(event) {
+    event.preventDefault();
+
+    const date = document.getElementById('outgoing-date').value;
+    const name = document.getElementById('outgoing-item-name').value;
+    const qty = parseFloat(document.getElementById('outgoing-qty').value);
+
+    if (!name || isNaN(qty)) {
+        showAlert("Mohon lengkapi data.");
+        return;
+    }
+
+    const stock = getData('stock');
+    const itemIndex = stock.findIndex(item => item.name === name);
+
+    if (itemIndex === -1) {
+        showAlert("Barang tidak ditemukan.");
+        return;
+    }
+
+    if (stock[itemIndex].stock < qty) {
+        showAlert(`Stok tidak cukup! Sisa stok: ${stock[itemIndex].stock}`);
+        return;
+    }
+
+    stock[itemIndex].stock = (parseFloat(stock[itemIndex].stock) || 0) - qty;
+    saveData('stock', stock);
+
+    const history = getData('outgoing') || [];
+    history.push({
+        id: Date.now(),
+        date: date,
+        name: name,
+        qty: qty
+    });
+
+    saveData('outgoing', history);
+
+    showAlert("Barang Keluar berhasil disimpan & Stock berkurang!");
+    document.getElementById('outgoing-form').reset();
+    document.getElementById('outgoing-date').valueAsDate = new Date();
+    renderOutgoingTable();
+}
+
+function deleteIncoming(id) {
+    showConfirm("Yakin ingin menghapus riwayat ini? (Stok tidak akan berubah otomatis)", () => {
+        const history = getData('incoming') || [];
+        const newHistory = history.filter(item => item.id !== id);
+        saveData('incoming', newHistory);
+        renderIncomingTable();
+    });
+}
+
+function deleteOutgoing(id) {
+    showConfirm("Yakin ingin menghapus riwayat ini? (Stok tidak akan berubah otomatis)", () => {
+        const history = getData('outgoing') || [];
+        const newHistory = history.filter(item => item.id !== id);
+        saveData('outgoing', newHistory);
+        renderOutgoingTable();
+    });
+}
+
+function renderIncomingTable() {
+    const tbody = document.querySelector('#incoming-table tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const history = getData('incoming') || [];
+    // Sort desc by date/id
+    const sorted = [...history].sort((a, b) => b.id - a.id);
+
+    sorted.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${item.date}</td>
+            <td>${item.name}</td>
+            <td>${item.supplier}</td>
+            <td>${item.qty}</td>
+            <td>${formatRupiah(item.payment)}</td>
+            <td style="text-align: center;">
+                <button class="delete-button" onclick="deleteIncoming(${item.id})">Hapus</button>
+            </td>
+            <td style="text-align: center;"><input type="checkbox" class="incoming-checkbox" value="${item.id}" onclick="checkSelectAllStatus('incoming')"></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    checkSelectAllStatus('incoming');
+}
+
+function renderOutgoingTable() {
+    const tbody = document.querySelector('#outgoing-table tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const history = getData('outgoing') || [];
+    const sorted = [...history].sort((a, b) => b.id - a.id);
+
+    sorted.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${item.date}</td>
+            <td>${item.name}</td>
+            <td>${item.qty}</td>
+            <td style="text-align: center;">
+                 <button class="delete-button" onclick="deleteOutgoing(${item.id})">Hapus</button>
+            </td>
+            <td style="text-align: center;"><input type="checkbox" class="outgoing-checkbox" value="${item.id}" onclick="checkSelectAllStatus('outgoing')"></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    checkSelectAllStatus('outgoing');
+}
+
+function toggleSelectAll(type) {
+    const master = document.getElementById(`${type}-select-all`);
+    const checkboxes = document.querySelectorAll(`.${type}-checkbox`);
+    checkboxes.forEach(cb => cb.checked = master.checked);
+}
+
+function checkSelectAllStatus(type) {
+    const master = document.getElementById(`${type}-select-all`);
+    const checkboxes = document.querySelectorAll(`.${type}-checkbox`);
+    if (checkboxes.length === 0) {
+        if (master) master.checked = false;
+        return;
+    }
+
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    if (master) master.checked = allChecked;
+}
+
+function downloadIncomingExcel() {
+    const checkboxes = document.querySelectorAll('.incoming-checkbox:checked');
+    if (checkboxes.length === 0) {
+        showAlert("Pilih data yang ingin didownload terlebih dahulu.");
+        return;
+    }
+
+    const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    const history = getData('incoming');
+    const dataToExport = history.filter(item => selectedIds.includes(item.id)).map(item => ({
+        Tanggal: item.date,
+        'Nama Barang': item.name,
+        Supplier: item.supplier,
+        Jumlah: String(item.qty), // Convert to string for left alignment
+        Pembayaran: String(item.payment) // Convert to string for left alignment
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+
+    // Set column widths
+    ws['!cols'] = [
+        { wch: 20 }, // Tanggal
+        { wch: 40 }, // Nama Barang
+        { wch: 30 }, // Supplier
+        { wch: 15 }, // Jumlah
+        { wch: 20 }  // Pembayaran
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "BarangMasuk");
+    XLSX.writeFile(wb, "Barang_Masuk.xlsx");
+}
+
+function downloadOutgoingExcel() {
+    const checkboxes = document.querySelectorAll('.outgoing-checkbox:checked');
+    if (checkboxes.length === 0) {
+        showAlert("Pilih data yang ingin didownload terlebih dahulu.");
+        return;
+    }
+
+    const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    const history = getData('outgoing');
+    const dataToExport = history.filter(item => selectedIds.includes(item.id)).map(item => ({
+        Tanggal: item.date,
+        'Nama Barang': item.name,
+        Jumlah: String(item.qty) // Convert to string for left alignment
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+
+    // Set column widths
+    ws['!cols'] = [
+        { wch: 20 }, // Tanggal
+        { wch: 40 }, // Nama Barang
+        { wch: 15 }  // Jumlah
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "BarangKeluar");
+    XLSX.writeFile(wb, "Barang_Keluar.xlsx");
+}
+
+window.addIncomingGoods = addIncomingGoods;
+window.addOutgoingGoods = addOutgoingGoods;
+window.downloadIncomingExcel = downloadIncomingExcel;
+window.downloadOutgoingExcel = downloadOutgoingExcel;
+window.toggleSelectAll = toggleSelectAll;
+window.deleteIncoming = deleteIncoming;
+window.deleteOutgoing = deleteOutgoing;
+window.checkSelectAllStatus = checkSelectAllStatus;
