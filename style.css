@@ -665,6 +665,7 @@ label {
 
 input[type="text"],
 input[type="number"],
+input[type="date"],
 input[list],
 select,
 textarea {
@@ -2438,5 +2439,3 @@ body.dark-mode .detail-view>div>div[style*="background: #dcfce7"] button {
     background: #dc2626 !important;
     color: white !important;
 }
-
-
