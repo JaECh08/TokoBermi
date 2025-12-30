@@ -483,13 +483,11 @@ function showScreen(screenId) {
         updateDashboardStats();
     } else if (screenId === 'incoming-goods') {
         document.getElementById('incoming-date').valueAsDate = new Date();
-        setupGeneralAutocomplete('incoming-item-name', 'incoming-item-dropdown', (item) => {
-            document.getElementById('incoming-supplier').value = item.supplier || '';
-        });
+        if (typeof initTransactionForms === 'function') initTransactionForms();
         renderIncomingTable();
     } else if (screenId === 'outgoing-goods') {
         document.getElementById('outgoing-date').valueAsDate = new Date();
-        setupGeneralAutocomplete('outgoing-item-name', 'outgoing-item-dropdown');
+        if (typeof initTransactionForms === 'function') initTransactionForms();
         renderOutgoingTable();
     }
 }
@@ -566,7 +564,7 @@ function updateInvoiceDate() {
 
 function checkLowStock() {
     const stock = getData('stock');
-    const lowStockItems = stock.filter(item => item.stock <= (item.minStock || 0));
+    const lowStockItems = stock.filter(item => item.stock < (item.minStock || 0));
 
     if (lowStockItems.length > 0) {
         const itemNames = lowStockItems.map(item => item.name).join(', ');
@@ -944,7 +942,7 @@ function updateItemDetails(inputElement) {
         row.setAttribute('data-price', price);
     } else {
         // Jika tidak ditemukan, beri peringatan dan kosongkan
-        showAlert('⚠️ Barang tidak tersedia di stok barang!');
+        showAlert('⚠️ Barang tidak tersedia di stock barang!');
         inputElement.value = '';
         row.querySelector('.item-price-display').value = formatRupiah(0);
         row.setAttribute('data-price', 0);
@@ -1061,15 +1059,15 @@ function processInvoiceInternal() {
             return;
         }
 
-        // --- PERSIAPAN VALIDASI STOK (Validation Stock) ---
-        // Buat map sementara untuk validasi stok tanpa mengubah data asli dulu
+        // --- PERSIAPAN VALIDASI STOCK (Validation Stock) ---
+        // Buat map sementara untuk validasi stock tanpa mengubah data asli dulu
         const stockData = getData('stock');
         const tempStockMap = {};
         stockData.forEach(item => {
             tempStockMap[item.name] = item.stock;
         });
 
-        // Jika sedang EDIT, kembalikan stok lama ke tempStockMap untuk validasi
+        // Jika sedang EDIT, kembalikan stock lama ke tempStockMap untuk validasi
         if (editingInvoiceId !== null) {
             const existingInvoices = getData('invoices');
             const oldInvoice = existingInvoices.find(inv => inv.id === editingInvoiceId);
@@ -1086,7 +1084,7 @@ function processInvoiceInternal() {
         const itemRows = document.querySelectorAll('.item-row');
         let grandTotal = 0;
         let isStockSufficient = true;
-        const newStockUpdates = {}; // Untuk menyimpan perubahan stok jika valid
+        const newStockUpdates = {}; // Untuk menyimpan perubahan stock jika valid
 
         // 2. Validasi dan Pengumpulan Data Barang
         itemRows.forEach(row => {
@@ -1108,10 +1106,10 @@ function processInvoiceInternal() {
                 return;
             }
 
-            // Validasi Stok menggunakan tempStockMap (Estimasi stok setelah pengembalian barang lama)
+            // Validasi Stock menggunakan tempStockMap (Estimasi stock setelah pengembalian barang lama)
             const availableStock = tempStockMap[itemName] || 0;
 
-            // Cek apakah stok cukup (perhitungkan juga jika item yang sama muncul multiple kali di form baru)
+            // Cek apakah stock cukup (perhitungkan juga jika item yang sama muncul multiple kali di form baru)
             const currentUsage = (newStockUpdates[itemName] || 0) + qty;
 
             if (availableStock < currentUsage) {
@@ -1141,7 +1139,7 @@ function processInvoiceInternal() {
             return; // Hentikan proses jika stok tidak cukup atau data barang tidak lengkap
         }
 
-        // 3. UPDATE STOK BARANG (Real Update)
+        // 3. UPDATE STOCK BARANG (Real Update)
         let finalStock = getData('stock');
 
         // SECURITY FIX: Lakukan pembersihan duplikat item di data persediaan
@@ -1163,7 +1161,7 @@ function processInvoiceInternal() {
             finalStock = uniqueStock;
         }
 
-        // A. Jika EDIT, kembalikan dulu stok lama ke database
+        // A. Jika EDIT, kembalikan dulu stock lama ke database
         if (editingInvoiceId !== null) {
             const existingInvoices = getData('invoices');
             const oldInvoice = existingInvoices.find(inv => inv.id === editingInvoiceId);
@@ -1178,7 +1176,7 @@ function processInvoiceInternal() {
             }
         }
 
-        // B. Kurangi stok berdasarkan item baru (newStockUpdates)
+        // B. Kurangi stock berdasarkan item baru (newStockUpdates)
         finalStock = finalStock.map(item => {
             if (newStockUpdates[item.name]) {
                 item.stock -= newStockUpdates[item.name];
@@ -1257,7 +1255,7 @@ function processInvoiceInternal() {
     }
 }
 
-// --- FUNGSI STOK BARANG ---
+// --- FUNGSI STOCK BARANG ---
 
 function toggleStockSort() {
     const button = document.getElementById('stock-sort-button');
@@ -1280,7 +1278,7 @@ function renderStockTable() {
     const searchMode = document.getElementById('stock-search-mode') ? document.getElementById('stock-search-mode').value : 'name';
     const searchValue = document.getElementById('stock-search-input') ? document.getElementById('stock-search-input').value.toLowerCase() : '';
 
-    // Map stok dengan index aslinya agar edit/hapus tetap akurat
+    // Map stock dengan index aslinya agar edit/hapus tetap akurat
     let displayStock = stock.map((item, index) => ({ ...item, originalIndex: index }));
 
     // 1. Filter
@@ -1475,7 +1473,7 @@ function makeEditable(spanElement) {
 function downloadStockExcel() {
     const stock = getData('stock');
     if (!stock || stock.length === 0) {
-        showAlert('Tidak ada data stok untuk didownload.');
+        showAlert('Tidak ada data stock untuk didownload.');
         return;
     }
 
@@ -1511,11 +1509,11 @@ function downloadStockExcel() {
 
     // Buat workbook
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Stok Barang");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Stock Barang");
 
     // Download file
     const date = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(workbook, `Data_Stok_Bermi_${date}.xlsx`);
+    XLSX.writeFile(workbook, `Data_Stock_Bermi_${date}.xlsx`);
 }
 
 function saveFormData() {
@@ -2201,7 +2199,7 @@ function formatRupiahSimple(angka) {
     return new Intl.NumberFormat('id-ID').format(angka);
 }
 
-// --- FUNGSI BARU: HAPUS NOTA DAN KEMBALIKAN STOK ---
+// --- FUNGSI BARU: HAPUS NOTA DAN KEMBALIKAN STOCK ---
 
 // --- GANTI FUNGSI INI ---
 
@@ -2980,170 +2978,249 @@ window.addEventListener('click', function (e) {
 window.toggleCustomSelect = toggleCustomSelect;
 window.selectOption = selectOption;
 
-// --- LOGIC BARANG MASUK & KELUAR ---
+// --- LOGIC BARANG MASUK & KELUAR (NEW TRANSACTION SYSTEM) ---
 
-function setupGeneralAutocomplete(inputId, dropdownId, onSelect) {
+let incomingRowCounter = 0;
+let outgoingRowCounter = 0;
+let editingIncomingId = null;
+let editingOutgoingId = null;
+
+// --- SHARED UTILS ---
+
+function removeTransactionRow(btn) {
+    const row = btn.closest('.item-row');
+    const container = row.parentNode;
+    row.remove();
+    updateTransactionRowButtons(container);
+}
+
+function updateTransactionRowButtons(container) {
+    if (!container) return;
+    const rows = container.querySelectorAll('.item-row');
+    if (rows.length === 0) return; // Should not happen if logic is correct
+
+    // If only 1 row, hide delete button. Otherwise show it.
+    const displayStyle = rows.length > 1 ? 'inline-block' : 'none';
+
+    rows.forEach(row => {
+        const btn = row.querySelector('.delete-button');
+        if (btn) btn.style.display = displayStyle;
+    });
+}
+
+function setupGeneralAutocomplete(inputId, dropdownId, onSelect = null) {
     const input = document.getElementById(inputId);
     const dropdown = document.getElementById(dropdownId);
 
     if (!input || !dropdown) return;
+    if (input.dataset.bound) return; // Prevent double binding
+    input.dataset.bound = "true";
 
-    // Use cloneNode to remove old event listeners if any, to prevent duplicates on navigation
-    // Actually simplicity is better: just ensure we don't double bind? 
-    // showScreen calls this every time. Let's make sure we handle it.
-    // A simple way is to tag it.
-    if (input.dataset.autocompleteBound) return;
-    input.dataset.autocompleteBound = "true";
+    const stock = getData('stock') || [];
 
-    input.addEventListener('input', function () {
-        const val = this.value;
-        const stock = getData('stock');
-        const sortedStock = [...stock].sort((a, b) => a.name.localeCompare(b.name));
-
+    const showDropdown = (filter = '') => {
         dropdown.innerHTML = '';
-        if (!val) {
-            dropdown.classList.remove('show');
+        const filtered = stock.filter(item => item.name.toLowerCase().includes(filter.toLowerCase()));
+
+        if (filtered.length === 0) {
+            dropdown.style.display = 'none';
             return;
         }
 
-        let matchCount = 0;
-        sortedStock.forEach(item => {
-            if (item.name.toLowerCase().includes(val.toLowerCase())) {
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'dropdown-item';
-                const regex = new RegExp(`(${val})`, 'gi');
-                itemDiv.innerHTML = `<span>${item.name.replace(regex, '<span class="match-text">$1</span>')}</span>`;
+        filtered.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'dropdown-item';
 
-                itemDiv.addEventListener('click', function () {
-                    input.value = item.name;
-                    dropdown.classList.remove('show');
-                    if (onSelect) onSelect(item);
-                });
-                dropdown.appendChild(itemDiv);
-                matchCount++;
-            }
+            // Highlight Match
+            const regex = new RegExp(`(${filter})`, 'gi');
+            const highlightedName = item.name.replace(regex, '<span class="match-text">$1</span>');
+
+            div.innerHTML = `<span>${highlightedName}</span> <small style="opacity: 0.7;">(Stock: ${item.stock})</small>`;
+
+            div.addEventListener('click', () => {
+                input.value = item.name;
+                if (onSelect) onSelect(item);
+                dropdown.style.display = 'none';
+            });
+
+            dropdown.appendChild(div);
         });
+        dropdown.style.display = 'block';
+    };
 
-        if (matchCount > 0) dropdown.classList.add('show');
-        else dropdown.classList.remove('show');
-    });
-
-    // Close on click outside
-    document.addEventListener('click', function (e) {
-        if (e.target !== input && e.target !== dropdown) {
-            dropdown.classList.remove('show');
-        }
-    });
+    input.addEventListener('input', () => showDropdown(input.value));
+    input.addEventListener('focus', () => showDropdown(input.value));
 }
 
-function addIncomingGoods(event) {
+// --- LOGIC BARANG MASUK (INCOMING) ---
+
+function addIncomingRow(data = null) {
+    incomingRowCounter++;
+    const container = document.getElementById('incoming-items-list');
+
+    const row = document.createElement('div');
+    row.className = 'item-row transaction-row'; // Added class for CSS styling
+    row.id = `incoming-row-${incomingRowCounter}`;
+    row.style.display = 'grid';
+    row.style.gridTemplateColumns = '2fr 1fr 1fr 1.5fr auto';
+    row.style.gap = '10px';
+    row.style.alignItems = 'end';
+    row.style.marginBottom = '10px';
+    row.style.padding = '10px';
+    // Removed inline border/bg styles to allow CSS to handle Dark Mode
+
+
+    // HTML Structure
+    row.innerHTML = `
+        <div class="form-group" style="margin-bottom:0; position:relative;">
+            <label style="font-size:0.85em;">Nama Barang</label>
+            <div class="autocomplete-wrapper">
+                <input type="text" class="incoming-item-name" id="incoming-name-${incomingRowCounter}" placeholder="Cari..." required autocomplete="off">
+                <div class="custom-dropdown" id="dropdown-incoming-${incomingRowCounter}"></div>
+            </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.85em;">Jumlah</label>
+            <input type="number" class="incoming-item-qty" min="0" step="any" required placeholder="0" value="1">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.85em;">Satuan</label>
+            <input type="text" class="incoming-item-unit" placeholder="Pcs">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.85em;">Harga</label>
+            <input type="number" class="incoming-item-price" min="0" step="any" required placeholder="Rp">
+        </div>
+        <button type="button" class="delete-button" onclick="removeTransactionRow(this)" style="margin-bottom:2px; height:38px; padding:0 12px; min-width: 40px; background: #ef4444; color: white; border: none; border-radius: 6px;">×</button>
+    `;
+
+    container.appendChild(row);
+
+    // Setup Autocomplete
+    const nameInput = row.querySelector('.incoming-item-name');
+    const unitInput = row.querySelector('.incoming-item-unit');
+
+    setupGeneralAutocomplete(`incoming-name-${incomingRowCounter}`, `dropdown-incoming-${incomingRowCounter}`, (item) => {
+        if (item.unit) unitInput.value = item.unit;
+    });
+
+    // Populate data if provided (for Edit)
+    if (data) {
+        nameInput.value = data.name;
+        row.querySelector('.incoming-item-qty').value = data.qty;
+        unitInput.value = data.unit || '';
+        row.querySelector('.incoming-item-price').value = data.price;
+    }
+
+    updateTransactionRowButtons(container);
+}
+
+function addIncomingTransaction(event) {
     event.preventDefault();
 
     const date = document.getElementById('incoming-date').value;
-    const name = document.getElementById('incoming-item-name').value;
     const supplier = document.getElementById('incoming-supplier').value;
-    const qty = parseFloat(document.getElementById('incoming-qty').value);
-    const payment = parseFloat(document.getElementById('incoming-payment').value);
+    const itemRows = document.querySelectorAll('#incoming-items-list .item-row');
 
-    if (!name || isNaN(qty) || isNaN(payment)) {
-        showAlert("Mohon lengkapi data dengan benar.");
+    if (itemRows.length === 0) {
+        addIncomingRow(); // Add empty row if none
+        showAlert("Mohon tambahkan setidaknya satu barang.");
         return;
     }
 
-    // 1. Update Stock
-    const stock = getData('stock');
-    const itemIndex = stock.findIndex(item => item.name === name);
+    const items = [];
+    let isValid = true;
+    let itemsFound = false;
 
-    if (itemIndex === -1) {
-        showAlert("Barang tidak ditemukan di database Stock Barang via Nama.");
-        return;
-    }
+    // VALIDASI & COLLECT DATA
+    itemRows.forEach(row => {
+        const name = row.querySelector('.incoming-item-name').value.trim();
+        const qty = parseFloat(row.querySelector('.incoming-item-qty').value);
+        const unit = row.querySelector('.incoming-item-unit').value.trim();
+        const price = parseFloat(row.querySelector('.incoming-item-price').value);
 
-    // Update stock quantity
-    stock[itemIndex].stock = (parseFloat(stock[itemIndex].stock) || 0) + qty;
-
-    // Save stock to DB
-    saveData('stock', stock);
-
-    // 2. Add to History
-    const history = getData('incoming') || [];
-    history.push({
-        id: Date.now(),
-        date: date,
-        name: name,
-        supplier: supplier,
-        qty: qty,
-        payment: payment
+        if (name) { // Only process rows with name
+            itemsFound = true;
+            if (isNaN(qty) || isNaN(price)) {
+                isValid = false;
+            }
+            items.push({ name, qty, unit, price });
+        }
     });
 
-    saveData('incoming', history);
+    if (!itemsFound) {
+        showAlert("Mohon isi data barang.");
+        return;
+    }
 
-    showAlert("Barang Masuk berhasil disimpan & Stock bertambah!");
+    if (!isValid) {
+        showAlert("Mohon lengkapi semua data barang (Nama, Jumlah, Harga).");
+        return;
+    }
+
+    // IF EDITING: REVERT STOCK FROM OLD TRANSACTION
+    if (editingIncomingId) {
+        const history = getData('incoming');
+        const oldTrans = history.find(t => t.id === editingIncomingId);
+        if (oldTrans) {
+            // Revert stock (Subtract the added stock)
+            const stock = getData('stock');
+            // Check legacy vs new
+            const oldItems = oldTrans.items || [{ name: oldTrans.name, qty: oldTrans.qty }];
+
+            oldItems.forEach(oldItem => {
+                const stockItem = stock.find(s => s.name === oldItem.name);
+                if (stockItem) {
+                    stockItem.stock -= oldItem.qty; // Reverse the addition
+                }
+            });
+            saveData('stock', stock);
+        }
+    }
+
+    // APPLY STOCK UPDATES
+    const stock = getData('stock');
+    items.forEach(newItem => {
+        const stockItem = stock.find(s => s.name === newItem.name);
+        if (stockItem) {
+            stockItem.stock = (parseFloat(stockItem.stock) || 0) + newItem.qty;
+        }
+    });
+    saveData('stock', stock);
+
+    // SAVE TRANSACTION
+    const incomingHistory = getData('incoming') || [];
+
+    if (editingIncomingId) {
+        const index = incomingHistory.findIndex(t => t.id === editingIncomingId);
+        if (index !== -1) {
+            incomingHistory[index] = {
+                id: editingIncomingId,
+                date,
+                supplier,
+                items
+            };
+            showAlert("Transaksi Barang Masuk berhasil diperbarui!");
+        }
+        cancelIncomingEdit(); // Reset UI
+    } else {
+        incomingHistory.push({
+            id: Date.now(),
+            date,
+            supplier,
+            items
+        });
+        showAlert("Barang Masuk berhasil disimpan!");
+    }
+
+    saveData('incoming', incomingHistory);
+
+    // RESET FORM
     document.getElementById('incoming-form').reset();
-    document.getElementById('incoming-date').valueAsDate = new Date(); // Reset date to today
+    document.getElementById('incoming-items-list').innerHTML = '';
+    document.getElementById('incoming-date').valueAsDate = new Date();
+    addIncomingRow(); // Add one empty row
     renderIncomingTable();
-}
-
-function addOutgoingGoods(event) {
-    event.preventDefault();
-
-    const date = document.getElementById('outgoing-date').value;
-    const name = document.getElementById('outgoing-item-name').value;
-    const qty = parseFloat(document.getElementById('outgoing-qty').value);
-
-    if (!name || isNaN(qty)) {
-        showAlert("Mohon lengkapi data.");
-        return;
-    }
-
-    const stock = getData('stock');
-    const itemIndex = stock.findIndex(item => item.name === name);
-
-    if (itemIndex === -1) {
-        showAlert("Barang tidak ditemukan.");
-        return;
-    }
-
-    if (stock[itemIndex].stock < qty) {
-        showAlert(`Stok tidak cukup! Sisa stok: ${stock[itemIndex].stock}`);
-        return;
-    }
-
-    stock[itemIndex].stock = (parseFloat(stock[itemIndex].stock) || 0) - qty;
-    saveData('stock', stock);
-
-    const history = getData('outgoing') || [];
-    history.push({
-        id: Date.now(),
-        date: date,
-        name: name,
-        qty: qty
-    });
-
-    saveData('outgoing', history);
-
-    showAlert("Barang Keluar berhasil disimpan & Stock berkurang!");
-    document.getElementById('outgoing-form').reset();
-    document.getElementById('outgoing-date').valueAsDate = new Date();
-    renderOutgoingTable();
-}
-
-function deleteIncoming(id) {
-    showConfirm("Yakin ingin menghapus riwayat ini? (Stok tidak akan berubah otomatis)", () => {
-        const history = getData('incoming') || [];
-        const newHistory = history.filter(item => item.id !== id);
-        saveData('incoming', newHistory);
-        renderIncomingTable();
-    });
-}
-
-function deleteOutgoing(id) {
-    showConfirm("Yakin ingin menghapus riwayat ini? (Stok tidak akan berubah otomatis)", () => {
-        const history = getData('outgoing') || [];
-        const newHistory = history.filter(item => item.id !== id);
-        saveData('outgoing', newHistory);
-        renderOutgoingTable();
-    });
 }
 
 function renderIncomingTable() {
@@ -3152,26 +3229,355 @@ function renderIncomingTable() {
     tbody.innerHTML = '';
 
     const history = getData('incoming') || [];
-    // Sort desc by date/id
+    const searchValue = document.getElementById('incoming-search-input').value.toLowerCase();
+
+    // Sort new to old
     const sorted = [...history].sort((a, b) => b.id - a.id);
 
-    sorted.forEach(item => {
+    sorted.forEach(trans => {
+        // Handle Legacy Data
+        const items = trans.items || [{ name: trans.name, qty: trans.qty }];
+
+        // Filter Logic
+        if (searchValue) {
+            const matchSupplier = (trans.supplier || '').toLowerCase().includes(searchValue);
+            const matchItem = items.some(i => i.name.toLowerCase().includes(searchValue));
+            if (!matchSupplier && !matchItem) return;
+        }
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${item.date}</td>
-            <td>${item.name}</td>
-            <td>${item.supplier}</td>
-            <td>${item.qty}</td>
-            <td>${formatRupiah(item.payment)}</td>
+            <td>${trans.date}</td>
+            <td>${trans.supplier || '-'}</td>
             <td style="text-align: center;">
-                <button class="delete-button" onclick="deleteIncoming(${item.id})">Hapus</button>
+                <button class="action-btn" onclick="showIncomingDetail(${trans.id})" style="background:#3b82f6; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Rincian Pesanan</button>
             </td>
-            <td style="text-align: center;"><input type="checkbox" class="incoming-checkbox" value="${item.id}" onclick="checkSelectAllStatus('incoming')"></td>
+            <td style="text-align: center;">
+                <button class="delete-button" onclick="deleteIncomingTransaction(${trans.id})" title="Hapus" style="padding:6px 12px; background-color: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">Hapus</button>
+            </td>
         `;
         tbody.appendChild(tr);
     });
+}
 
-    checkSelectAllStatus('incoming');
+function showIncomingDetail(id) {
+    const history = getData('incoming');
+    const trans = history.find(t => t.id === id);
+    if (!trans) return;
+
+    const items = trans.items || [{ name: trans.name, qty: trans.qty, unit: 'Pcs', price: trans.payment || 0 }]; // Legacy fallback
+
+    const content = `
+        <div style="margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+            <p><strong>Tanggal:</strong> ${trans.date}</p>
+            <p><strong>Supplier:</strong> ${trans.supplier || '-'}</p>
+        </div>
+        <table class="detail-table" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Nama Barang</th>
+                    <th>Jumlah</th>
+                    <th>Satuan</th>
+                    <th>Harga</th>
+                    <th>Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map(item => `
+                    <tr>
+                        <td>${item.name}</td>
+                        <td style="text-align:left;">${item.qty}</td>
+                        <td style="text-align:left;">${item.unit || '-'}</td>
+                        <td style="text-align:left;">${formatRupiah(item.price || 0)}</td>
+                        <td style="text-align:left;">${formatRupiah((item.price || 0) * (item.qty || 0))}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        
+        <div style="margin-top: 25px; display: flex; gap: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+             <button class="edit-button" onclick="editIncomingTransaction(${trans.id}); closeDetailModal();" style="flex: 1; height: 50px !important; min-height: 50px !important; max-height: 50px !important; padding: 0 !important; margin: 0 !important; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; display: flex !important; justify-content: center; align-items: center; gap: 8px; font-weight: 500; box-sizing: border-box !important; line-height: 1 !important; vertical-align: middle; font-size: 14px;">
+                <span style="line-height: 1;">✏️</span> <span style="line-height: 1;">Edit</span>
+             </button>
+             <button class="download-button" onclick="downloadIncomingTransaction(${trans.id})" style="flex: 1; height: 50px !important; min-height: 50px !important; max-height: 50px !important; padding: 0 !important; margin: 0 !important; background: var(--success-color); color: white; border: none; border-radius: 6px; cursor: pointer; display: flex !important; justify-content: center; align-items: center; gap: 8px; font-weight: 500; box-sizing: border-box !important; line-height: 1 !important; vertical-align: middle; font-size: 14px;">
+                <span style="line-height: 1;">📥</span> <span style="line-height: 1;">Download Excel</span>
+             </button>
+        </div>
+    `;
+
+    const modal = document.getElementById('detail-modal');
+    modal.querySelector('.modal-content').style.maxWidth = '900px'; // Make modal wider
+    modal.querySelector('.modal-content').style.width = '90%';
+
+    document.getElementById('detail-modal-title').textContent = '📝 Rincian Barang Masuk';
+    document.getElementById('detail-modal-body').innerHTML = content;
+    modal.style.display = 'flex';
+}
+
+function editIncomingTransaction(id) {
+    const history = getData('incoming');
+    const trans = history.find(t => t.id === id);
+    if (!trans) return;
+
+    editingIncomingId = id;
+
+    // Populate Form
+    document.getElementById('incoming-date').value = trans.date;
+    document.getElementById('incoming-supplier').value = trans.supplier || '';
+
+    // Clear list
+    const container = document.getElementById('incoming-items-list');
+    container.innerHTML = '';
+
+    // Add rows
+    const items = trans.items || [{ name: trans.name, qty: trans.qty, unit: 'Pcs', price: trans.payment }];
+    items.forEach(item => addIncomingRow(item));
+
+    // Show Cancel Button
+    document.getElementById('cancel-incoming-edit').style.display = 'inline-block';
+
+    // Scroll to form
+    const elem = document.querySelector('#incoming-goods'); // Target the container if possible or just scroll top
+    elem.scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelIncomingEdit() {
+    editingIncomingId = null;
+    document.getElementById('incoming-form').reset();
+    document.getElementById('incoming-date').valueAsDate = new Date();
+    document.getElementById('incoming-items-list').innerHTML = '';
+    document.getElementById('cancel-incoming-edit').style.display = 'none';
+    addIncomingRow();
+}
+
+function downloadIncomingTransaction(id) {
+    const history = getData('incoming');
+    const trans = history.find(t => t.id === id);
+    if (!trans) return;
+
+    const items = trans.items || [{ name: trans.name, qty: trans.qty, unit: 'Pcs', price: trans.payment }];
+
+    const dataToExport = items.map(item => ({
+        Tanggal: trans.date,
+        Supplier: trans.supplier || '-',
+        'Nama Barang': item.name,
+        Jumlah: String(item.qty),
+        Satuan: item.unit || '-',
+        Harga: String(item.price || 0),
+        Total: String((item.price || 0) * (item.qty || 0))
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+
+    // Set column widths
+    const wscols = [
+        { wch: 15 }, // Tanggal
+        { wch: 25 }, // Supplier
+        { wch: 30 }, // Nama Barang
+        { wch: 10 }, // Jumlah
+        { wch: 10 }, // Satuan
+        { wch: 15 }, // Harga
+        { wch: 15 }  // Total
+    ];
+    ws['!cols'] = wscols;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Detail Masuk");
+    XLSX.writeFile(wb, `BarangMasuk_${trans.supplier}_${trans.date}.xlsx`);
+}
+
+function deleteIncomingTransaction(id) {
+    showConfirm("Apakah Anda yakin ingin menghapus transaksi Barang Masuk ini? (Stock TIDAK akan berubah)", () => {
+        const history = getData('incoming') || [];
+        const transIndex = history.findIndex(t => t.id === id);
+
+        if (transIndex === -1) return;
+
+        // Remove from history
+        history.splice(transIndex, 1);
+        saveData('incoming', history);
+
+        renderIncomingTable();
+        showAlert("Transaksi berhasil dihapus.");
+    });
+}
+
+
+// --- LOGIC BARANG KELUAR (OUTGOING) ---
+
+function addOutgoingRow(data = null) {
+    outgoingRowCounter++;
+    const container = document.getElementById('outgoing-items-list');
+
+    const row = document.createElement('div');
+    row.className = 'item-row transaction-row';
+    row.id = `outgoing-row-${outgoingRowCounter}`;
+    row.style.display = 'grid';
+    row.style.gridTemplateColumns = '3fr 1fr auto';
+    row.style.gap = '10px';
+    row.style.alignItems = 'end';
+    row.style.marginBottom = '10px';
+    row.style.padding = '10px';
+    // Removed inline border/bg styles for Light/Dark mode compatibility
+
+
+    // HTML Structure
+    row.innerHTML = `
+        <div class="form-group" style="margin-bottom:0; position:relative;">
+            <label style="font-size:0.85em;">Nama Barang</label>
+            <div class="autocomplete-wrapper">
+                <input type="text" class="outgoing-item-name" id="outgoing-name-${outgoingRowCounter}" placeholder="Cari..." required autocomplete="off">
+                <div class="custom-dropdown" id="dropdown-outgoing-${outgoingRowCounter}"></div>
+            </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.85em;">Jumlah</label>
+            <input type="number" class="outgoing-item-qty" min="0" step="any" required placeholder="0" value="1">
+        </div>
+        <button type="button" class="delete-button" onclick="removeTransactionRow(this)" style="margin-bottom:2px; height:38px; padding:0 12px; min-width: 40px; background: #ef4444; color: white; border: none; border-radius: 6px;">×</button>
+    `;
+
+    container.appendChild(row);
+
+    // Setup Autocomplete
+    setupGeneralAutocomplete(`outgoing-name-${outgoingRowCounter}`, `dropdown-outgoing-${outgoingRowCounter}`);
+
+    // Populate data
+    if (data) {
+        row.querySelector('.outgoing-item-name').value = data.name;
+        row.querySelector('.outgoing-item-qty').value = data.qty;
+    }
+
+    updateTransactionRowButtons(container);
+}
+
+function addOutgoingTransaction(event) {
+    event.preventDefault();
+
+    const date = document.getElementById('outgoing-date').value;
+    const itemRows = document.querySelectorAll('#outgoing-items-list .item-row');
+
+    if (itemRows.length === 0) {
+        addOutgoingRow();
+        showAlert("Mohon tambahkan setidaknya satu barang.");
+        return;
+    }
+
+    const items = [];
+    let isValid = true;
+    let itemsFound = false;
+
+    // Prepare Stock Map for Validation
+    const stock = getData('stock');
+    const tempStockMap = {};
+    stock.forEach(s => tempStockMap[s.name] = (parseFloat(s.stock) || 0));
+
+    // IF EDITING: RESTORE STOCK FIRST TO TEMP MAP
+    if (editingOutgoingId) {
+        const history = getData('outgoing');
+        const oldTrans = history.find(t => t.id === editingOutgoingId);
+        if (oldTrans) {
+            const oldItems = oldTrans.items || [{ name: oldTrans.name, qty: oldTrans.qty }];
+            oldItems.forEach(oldItem => {
+                if (tempStockMap[oldItem.name] !== undefined) {
+                    tempStockMap[oldItem.name] += oldItem.qty;
+                }
+            });
+        }
+    }
+
+    const itemUpdates = {}; // Maps name -> qty to deduct
+
+    // VALIDATION
+    itemRows.forEach(row => {
+        const name = row.querySelector('.outgoing-item-name').value.trim();
+        const qty = parseFloat(row.querySelector('.outgoing-item-qty').value);
+
+        if (name) {
+            itemsFound = true;
+            if (isNaN(qty) || qty <= 0) {
+                isValid = false;
+            }
+
+            // Check Stock
+            if (tempStockMap[name] === undefined) {
+                showAlert(`Barang "${name}" tidak ditemukan di stock.`);
+                isValid = false;
+                return;
+            }
+
+            const currentDeduction = (itemUpdates[name] || 0) + qty;
+            if (tempStockMap[name] < currentDeduction) {
+                showAlert(`Stock "${name}" tidak cukup! (Tersedia: ${tempStockMap[name]})`);
+                isValid = false;
+                return;
+            }
+            itemUpdates[name] = currentDeduction;
+            items.push({ name, qty });
+        }
+    });
+
+    if (!itemsFound) {
+        showAlert("Mohon isi data barang.");
+        return;
+    }
+
+    if (!isValid) return;
+
+    // EXECUTE UPDATES
+    // 1. If Editing, Revert Real Stock First
+    if (editingOutgoingId) {
+        const history = getData('outgoing');
+        const oldTrans = history.find(t => t.id === editingOutgoingId);
+        if (oldTrans) {
+            const oldItems = oldTrans.items || [{ name: oldTrans.name, qty: oldTrans.qty }];
+            oldItems.forEach(oldItem => {
+                const stockItem = stock.find(s => s.name === oldItem.name);
+                if (stockItem) stockItem.stock += oldItem.qty;
+            });
+        }
+    }
+
+    // 2. Deduct New Stock
+    items.forEach(item => {
+        const stockItem = stock.find(s => s.name === item.name);
+        if (stockItem) {
+            stockItem.stock -= item.qty;
+        }
+    });
+    saveData('stock', stock);
+
+    // 3. Save Transaction
+    const outgoingHistory = getData('outgoing') || [];
+
+    if (editingOutgoingId) {
+        const index = outgoingHistory.findIndex(t => t.id === editingOutgoingId);
+        if (index !== -1) {
+            outgoingHistory[index] = {
+                id: editingOutgoingId,
+                date,
+                items
+            };
+            showAlert("Transaksi Barang Keluar berhasil diperbarui!");
+        }
+        cancelOutgoingEdit();
+    } else {
+        outgoingHistory.push({
+            id: Date.now(),
+            date,
+            items
+        });
+        showAlert("Barang Keluar berhasil disimpan!");
+    }
+
+    saveData('outgoing', outgoingHistory);
+
+    // RESET FORM
+    document.getElementById('outgoing-form').reset();
+    document.getElementById('outgoing-items-list').innerHTML = '';
+    document.getElementById('outgoing-date').valueAsDate = new Date();
+    addOutgoingRow();
+    renderOutgoingTable();
 }
 
 function renderOutgoingTable() {
@@ -3180,110 +3586,191 @@ function renderOutgoingTable() {
     tbody.innerHTML = '';
 
     const history = getData('outgoing') || [];
+    const searchValue = document.getElementById('outgoing-search-input').value.toLowerCase();
     const sorted = [...history].sort((a, b) => b.id - a.id);
 
-    sorted.forEach(item => {
+    sorted.forEach(trans => {
+        const items = trans.items || [{ name: trans.name, qty: trans.qty }];
+
+        if (searchValue) {
+            const matchItem = items.some(i => i.name.toLowerCase().includes(searchValue));
+            if (!matchItem) return;
+        }
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${item.date}</td>
-            <td>${item.name}</td>
-            <td>${item.qty}</td>
+            <td>${trans.date}</td>
             <td style="text-align: center;">
-                 <button class="delete-button" onclick="deleteOutgoing(${item.id})">Hapus</button>
+                <button class="action-btn" onclick="showOutgoingDetail(${trans.id})" style="background:#3b82f6; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Rincian Pesanan</button>
             </td>
-            <td style="text-align: center;"><input type="checkbox" class="outgoing-checkbox" value="${item.id}" onclick="checkSelectAllStatus('outgoing')"></td>
+            <td style="text-align: center;">
+                <button class="delete-button" onclick="deleteOutgoingTransaction(${trans.id})" title="Hapus" style="padding:6px 12px; background-color: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">Hapus</button>
+            </td>
         `;
         tbody.appendChild(tr);
     });
-
-    checkSelectAllStatus('outgoing');
 }
 
-function toggleSelectAll(type) {
-    const master = document.getElementById(`${type}-select-all`);
-    const checkboxes = document.querySelectorAll(`.${type}-checkbox`);
-    checkboxes.forEach(cb => cb.checked = master.checked);
-}
-
-function checkSelectAllStatus(type) {
-    const master = document.getElementById(`${type}-select-all`);
-    const checkboxes = document.querySelectorAll(`.${type}-checkbox`);
-    if (checkboxes.length === 0) {
-        if (master) master.checked = false;
-        return;
-    }
-
-    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-    if (master) master.checked = allChecked;
-}
-
-function downloadIncomingExcel() {
-    const checkboxes = document.querySelectorAll('.incoming-checkbox:checked');
-    if (checkboxes.length === 0) {
-        showAlert("Pilih data yang ingin didownload terlebih dahulu.");
-        return;
-    }
-
-    const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
-    const history = getData('incoming');
-    const dataToExport = history.filter(item => selectedIds.includes(item.id)).map(item => ({
-        Tanggal: item.date,
-        'Nama Barang': item.name,
-        Supplier: item.supplier,
-        Jumlah: String(item.qty), // Convert to string for left alignment
-        Pembayaran: String(item.payment) // Convert to string for left alignment
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(dataToExport);
-
-    // Set column widths
-    ws['!cols'] = [
-        { wch: 20 }, // Tanggal
-        { wch: 40 }, // Nama Barang
-        { wch: 30 }, // Supplier
-        { wch: 15 }, // Jumlah
-        { wch: 20 }  // Pembayaran
-    ];
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "BarangMasuk");
-    XLSX.writeFile(wb, "Barang_Masuk.xlsx");
-}
-
-function downloadOutgoingExcel() {
-    const checkboxes = document.querySelectorAll('.outgoing-checkbox:checked');
-    if (checkboxes.length === 0) {
-        showAlert("Pilih data yang ingin didownload terlebih dahulu.");
-        return;
-    }
-
-    const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+function showOutgoingDetail(id) {
     const history = getData('outgoing');
-    const dataToExport = history.filter(item => selectedIds.includes(item.id)).map(item => ({
-        Tanggal: item.date,
+    const trans = history.find(t => t.id === id);
+    if (!trans) return;
+
+    const items = trans.items || [{ name: trans.name, qty: trans.qty }];
+
+    const content = `
+        <div style="margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+            <p><strong>Tanggal:</strong> ${trans.date}</p>
+        </div>
+        <table class="detail-table" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Nama Barang</th>
+                    <th>Jumlah</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map(item => `
+                    <tr>
+                        <td>${item.name}</td>
+                        <td style="text-align:left;">${item.qty}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        
+        <div style="margin-top: 25px; display: flex; gap: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+             <button class="edit-button" onclick="editOutgoingTransaction(${trans.id}); closeDetailModal();" style="flex: 1; height: 50px !important; min-height: 50px !important; max-height: 50px !important; padding: 0 !important; margin: 0 !important; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; display: flex !important; justify-content: center; align-items: center; gap: 8px; font-weight: 500; box-sizing: border-box !important; line-height: 1 !important; vertical-align: middle; font-size: 14px;">
+                <span style="line-height: 1;">✏️</span> <span style="line-height: 1;">Edit</span>
+             </button>
+             <button class="download-button" onclick="downloadOutgoingTransaction(${trans.id})" style="flex: 1; height: 50px !important; min-height: 50px !important; max-height: 50px !important; padding: 0 !important; margin: 0 !important; background: var(--success-color); color: white; border: none; border-radius: 6px; cursor: pointer; display: flex !important; justify-content: center; align-items: center; gap: 8px; font-weight: 500; box-sizing: border-box !important; line-height: 1 !important; vertical-align: middle; font-size: 14px;">
+                <span style="line-height: 1;">📥</span> <span style="line-height: 1;">Download Excel</span>
+             </button>
+        </div>
+    `;
+
+    const modal = document.getElementById('detail-modal');
+    modal.querySelector('.modal-content').style.maxWidth = '900px';
+    modal.querySelector('.modal-content').style.width = '90%';
+
+    document.getElementById('detail-modal-title').textContent = '📝 Rincian Barang Keluar';
+    document.getElementById('detail-modal-body').innerHTML = content;
+    modal.style.display = 'flex';
+}
+
+function editOutgoingTransaction(id) {
+    const history = getData('outgoing');
+    const trans = history.find(t => t.id === id);
+    if (!trans) return;
+
+    editingOutgoingId = id;
+
+    document.getElementById('outgoing-date').value = trans.date;
+    const container = document.getElementById('outgoing-items-list');
+    container.innerHTML = '';
+
+    const items = trans.items || [{ name: trans.name, qty: trans.qty }];
+    items.forEach(item => addOutgoingRow(item));
+
+    document.getElementById('cancel-outgoing-edit').style.display = 'inline-block';
+
+    // Scroll to form
+    const elem = document.querySelector('#outgoing-goods');
+    elem.scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelOutgoingEdit() {
+    editingOutgoingId = null;
+    document.getElementById('outgoing-form').reset();
+    document.getElementById('outgoing-date').valueAsDate = new Date();
+    document.getElementById('outgoing-items-list').innerHTML = '';
+    document.getElementById('cancel-outgoing-edit').style.display = 'none';
+    addOutgoingRow();
+}
+
+function downloadOutgoingTransaction(id) {
+    const history = getData('outgoing');
+    const trans = history.find(t => t.id === id);
+    if (!trans) return;
+
+    const items = trans.items || [{ name: trans.name, qty: trans.qty }];
+    const dataToExport = items.map(item => ({
+        Tanggal: trans.date,
         'Nama Barang': item.name,
-        Jumlah: String(item.qty) // Convert to string for left alignment
+        Jumlah: String(item.qty)
     }));
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
 
     // Set column widths
-    ws['!cols'] = [
-        { wch: 20 }, // Tanggal
-        { wch: 40 }, // Nama Barang
-        { wch: 15 }  // Jumlah
+    const wscols = [
+        { wch: 15 }, // Tanggal
+        { wch: 30 }, // Nama Barang
+        { wch: 10 }  // Jumlah
     ];
+    ws['!cols'] = wscols;
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "BarangKeluar");
-    XLSX.writeFile(wb, "Barang_Keluar.xlsx");
+
+    XLSX.utils.book_append_sheet(wb, ws, "Detail Keluar");
+    XLSX.writeFile(wb, `BarangKeluar_${trans.date}.xlsx`);
 }
 
-window.addIncomingGoods = addIncomingGoods;
-window.addOutgoingGoods = addOutgoingGoods;
-window.downloadIncomingExcel = downloadIncomingExcel;
-window.downloadOutgoingExcel = downloadOutgoingExcel;
-window.toggleSelectAll = toggleSelectAll;
-window.deleteIncoming = deleteIncoming;
-window.deleteOutgoing = deleteOutgoing;
-window.checkSelectAllStatus = checkSelectAllStatus;
+function deleteOutgoingTransaction(id) {
+    showConfirm("Apakah Anda yakin ingin menghapus transaksi Barang Keluar ini? (Stock TIDAK akan berubah)", () => {
+        const history = getData('outgoing') || [];
+        const transIndex = history.findIndex(t => t.id === id);
+
+        if (transIndex === -1) return;
+
+        // Remove from history
+        history.splice(transIndex, 1);
+        saveData('outgoing', history);
+
+        renderOutgoingTable();
+        showAlert("Transaksi berhasil dihapus.");
+    });
+}
+
+// Window Assignments
+window.addIncomingTransaction = addIncomingTransaction;
+window.addOutgoingTransaction = addOutgoingTransaction;
+window.addIncomingRow = addIncomingRow;
+window.addOutgoingRow = addOutgoingRow;
+window.removeTransactionRow = removeTransactionRow;
+window.renderIncomingTable = renderIncomingTable;
+window.renderOutgoingTable = renderOutgoingTable;
+window.showIncomingDetail = showIncomingDetail;
+window.showOutgoingDetail = showOutgoingDetail;
+window.editIncomingTransaction = editIncomingTransaction;
+window.editOutgoingTransaction = editOutgoingTransaction;
+window.cancelIncomingEdit = cancelIncomingEdit;
+window.cancelOutgoingEdit = cancelOutgoingEdit;
+window.downloadIncomingTransaction = downloadIncomingTransaction;
+window.downloadIncomingTransaction = downloadIncomingTransaction;
+window.downloadOutgoingTransaction = downloadOutgoingTransaction;
+window.deleteIncomingTransaction = deleteIncomingTransaction;
+window.deleteOutgoingTransaction = deleteOutgoingTransaction;
+
+// Init Rows on Load
+// We'll call this whenever screen is shown if rows are empty
+function initTransactionForms() {
+    const incomingList = document.getElementById('incoming-items-list');
+    if (incomingList && incomingList.querySelectorAll('.item-row').length === 0) {
+        addIncomingRow();
+    }
+
+    const outgoingList = document.getElementById('outgoing-items-list');
+    if (outgoingList && outgoingList.querySelectorAll('.item-row').length === 0) {
+        addOutgoingRow();
+    }
+}
+window.initTransactionForms = initTransactionForms;
+window.setupGeneralAutocomplete = setupGeneralAutocomplete;
+
+// Global Click Listener for Custom Dropdowns
+window.addEventListener('click', function (e) {
+    if (!e.target.closest('.autocomplete-wrapper')) {
+        document.querySelectorAll('.custom-dropdown').forEach(d => d.style.display = 'none');
+    }
+});
