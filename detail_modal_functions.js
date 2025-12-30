@@ -22,7 +22,7 @@ function showProductsDetail() {
 
         if (item.stock <= 0) {
             outOfStockCount++;
-        } else if (item.stock <= (item.minStock || 0)) {
+        } else if (item.stock < (item.minStock || 0)) {
             lowStockCount++;
         }
     });
@@ -38,27 +38,27 @@ function showProductsDetail() {
                 <p>${totalProducts}</p>
             </div>
             <div class="detail-stat-item">
-                <h4>Total Unit Stok</h4>
+                <h4>Total Unit Stock</h4>
                 <p>${totalStock.toLocaleString('id-ID')}</p>
             </div>
             <div class="detail-stat-item">
-                <h4>Stok Habis</h4>
+                <h4>Stock Habis</h4>
                 <p style="color: var(--danger-color);">${outOfStockCount}</p>
             </div>
             <div class="detail-stat-item">
-                <h4>Stok Menipis</h4>
+                <h4>Stock Menipis</h4>
                 <p style="color: var(--accent-color);">${lowStockCount}</p>
             </div>
         </div>
 
         <div class="detail-section">
-            <h3>📉 10 Produk dengan Stok Terendah</h3>
+            <h3>📉 10 Produk dengan Stock Terendah</h3>
             <table class="detail-table">
                 <thead>
                     <tr>
                         <th>Nama Barang</th>
-                        <th>Stok Saat Ini</th>
-                        <th>Min. Stok</th>
+                        <th>Stock Saat Ini</th>
+                        <th>Min. Stock</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -70,7 +70,7 @@ function showProductsDetail() {
         if (item.stock <= 0) {
             status = '❌ Habis';
             statusColor = 'var(--danger-color)';
-        } else if (item.stock <= (item.minStock || 0)) {
+        } else if (item.stock < (item.minStock || 0)) {
             status = '⚠️ Menipis';
             statusColor = 'var(--accent-color)';
         }
@@ -92,7 +92,7 @@ function showProductsDetail() {
             <h3>💰 Nilai Total Inventori</h3>
             <ul class="detail-list">
                 <li>
-                    <span class="detail-list-label">Estimasi Nilai Total Stok</span>
+                    <span class="detail-list-label">Estimasi Nilai Total Stock</span>
                     <span class="detail-list-value">${formatRupiah(totalValue)}</span>
                 </li>
                 <li>
@@ -103,7 +103,7 @@ function showProductsDetail() {
         </div>
     `;
 
-    document.getElementById('detail-modal-title').textContent = '📦 Detail Produk & Stok';
+    document.getElementById('detail-modal-title').textContent = '📦 Detail Produk & Stock';
     document.getElementById('detail-modal-body').innerHTML = content;
     document.getElementById('detail-modal').style.display = 'flex';
 }
