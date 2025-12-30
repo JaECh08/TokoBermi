@@ -2439,3 +2439,25 @@ body.dark-mode .detail-view>div>div[style*="background: #dcfce7"] button {
     background: #dc2626 !important;
     color: white !important;
 }
+/* --- TRANSACTION ROW STYLES --- */
+.transaction-row {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    transition: background-color 0.3s, border-color 0.3s;
+}
+
+body.dark-mode .transaction-row {
+    background-color: #1e293b;
+    border-color: #334155;
+}
+
+/* Ensure labels inside are correct color */
+.transaction-row label {
+    color: var(--text-secondary);
+}
+
+body.dark-mode .transaction-row label {
+    color: #94a3b8;
+}
+
