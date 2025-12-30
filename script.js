@@ -485,10 +485,14 @@ function showScreen(screenId) {
         document.getElementById('incoming-date').valueAsDate = new Date();
         if (typeof initTransactionForms === 'function') initTransactionForms();
         renderIncomingTable();
+        // Initialize autocomplete for history search
+        setupGeneralAutocomplete('incoming-search-input', 'dropdown-history-incoming', () => renderIncomingTable());
     } else if (screenId === 'outgoing-goods') {
         document.getElementById('outgoing-date').valueAsDate = new Date();
         if (typeof initTransactionForms === 'function') initTransactionForms();
         renderOutgoingTable();
+        // Initialize autocomplete for history search
+        setupGeneralAutocomplete('outgoing-search-input', 'dropdown-history-outgoing', () => renderOutgoingTable());
     }
 }
 
@@ -3016,13 +3020,13 @@ function setupGeneralAutocomplete(inputId, dropdownId, onSelect = null) {
     if (input.dataset.bound) return; // Prevent double binding
     input.dataset.bound = "true";
 
-    const stock = getData('stock') || [];
-
     const showDropdown = (filter = '') => {
+        const stock = getData('stock') || [];
         dropdown.innerHTML = '';
-        const filtered = stock.filter(item => item.name.toLowerCase().includes(filter.toLowerCase()));
+        const trimmedFilter = filter.trim();
+        const filtered = stock.filter(item => item.name.toLowerCase().includes(trimmedFilter.toLowerCase()));
 
-        if (filtered.length === 0) {
+        if (filtered.length === 0 || trimmedFilter === '') {
             dropdown.style.display = 'none';
             return;
         }
@@ -3031,8 +3035,9 @@ function setupGeneralAutocomplete(inputId, dropdownId, onSelect = null) {
             const div = document.createElement('div');
             div.className = 'dropdown-item';
 
-            // Highlight Match
-            const regex = new RegExp(`(${filter})`, 'gi');
+            // Highlight Match - escape special regex characters
+            const escapedFilter = trimmedFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escapedFilter})`, 'gi');
             const highlightedName = item.name.replace(regex, '<span class="match-text">$1</span>');
 
             div.innerHTML = `<span>${highlightedName}</span> <small style="opacity: 0.7;">(Stock: ${item.stock})</small>`;
@@ -3050,6 +3055,13 @@ function setupGeneralAutocomplete(inputId, dropdownId, onSelect = null) {
 
     input.addEventListener('input', () => showDropdown(input.value));
     input.addEventListener('focus', () => showDropdown(input.value));
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.style.display = 'none';
+        }
+    });
 }
 
 // --- LOGIC BARANG MASUK (INCOMING) ---
@@ -3229,7 +3241,8 @@ function renderIncomingTable() {
     tbody.innerHTML = '';
 
     const history = getData('incoming') || [];
-    const searchValue = document.getElementById('incoming-search-input').value.toLowerCase();
+    const searchInput = document.getElementById('incoming-search-input');
+    const searchValue = searchInput ? searchInput.value.toLowerCase().trim() : '';
 
     // Sort new to old
     const sorted = [...history].sort((a, b) => b.id - a.id);
@@ -3586,7 +3599,8 @@ function renderOutgoingTable() {
     tbody.innerHTML = '';
 
     const history = getData('outgoing') || [];
-    const searchValue = document.getElementById('outgoing-search-input').value.toLowerCase();
+    const searchInput = document.getElementById('outgoing-search-input');
+    const searchValue = searchInput ? searchInput.value.toLowerCase().trim() : '';
     const sorted = [...history].sort((a, b) => b.id - a.id);
 
     sorted.forEach(trans => {
@@ -3746,7 +3760,6 @@ window.editIncomingTransaction = editIncomingTransaction;
 window.editOutgoingTransaction = editOutgoingTransaction;
 window.cancelIncomingEdit = cancelIncomingEdit;
 window.cancelOutgoingEdit = cancelOutgoingEdit;
-window.downloadIncomingTransaction = downloadIncomingTransaction;
 window.downloadIncomingTransaction = downloadIncomingTransaction;
 window.downloadOutgoingTransaction = downloadOutgoingTransaction;
 window.deleteIncomingTransaction = deleteIncomingTransaction;
