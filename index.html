@@ -339,8 +339,12 @@
                     <div class="stock-controls" style="margin-bottom: 15px;">
                         <h3 style="margin-bottom: 0;">Riwayat Barang Masuk</h3>
                         <div class="search-group">
-                            <input type="text" id="incoming-search-input" placeholder="Cari nama barang di riwayat..."
-                                oninput="renderIncomingTable()">
+                            <div class="autocomplete-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="incoming-search-input"
+                                    placeholder="Cari nama barang di riwayat..." oninput="renderIncomingTable()"
+                                    autocomplete="off">
+                                <div class="custom-dropdown" id="dropdown-history-incoming"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -384,8 +388,12 @@
                     <div class="stock-controls" style="margin-bottom: 15px;">
                         <h3 style="margin-bottom: 0;">Riwayat Barang Keluar</h3>
                         <div class="search-group">
-                            <input type="text" id="outgoing-search-input" placeholder="Cari nama barang di riwayat..."
-                                oninput="renderOutgoingTable()">
+                            <div class="autocomplete-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="outgoing-search-input"
+                                    placeholder="Cari nama barang di riwayat..." oninput="renderOutgoingTable()"
+                                    autocomplete="off">
+                                <div class="custom-dropdown" id="dropdown-history-outgoing"></div>
+                            </div>
                         </div>
                     </div>
 
