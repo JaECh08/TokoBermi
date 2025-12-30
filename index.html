@@ -59,7 +59,7 @@
                     <span class="icon">📝</span> <span class="nav-label">Buat Nota</span>
                 </button>
                 <button class="nav-item" onclick="showScreen('stock-management')">
-                    <span class="icon">📦</span> <span class="nav-label">Stok Barang</span>
+                    <span class="icon">📦</span> <span class="nav-label">Stock Barang</span>
                 </button>
                 <button class="nav-item" onclick="showScreen('incoming-goods')">
                     <span class="icon">📥</span> <span class="nav-label">Barang Masuk</span>
@@ -183,7 +183,7 @@
                 </div>
 
                 <div id="stock-management" class="screen">
-                    <h2>Stok Barang</h2>
+                    <h2>Stock Barang</h2>
                     <!-- Form Tambah Barang Baru -->
                     <div class="card add-item-card" style="margin-bottom: 30px;">
                         <h3 style="margin-bottom: 20px;">📦 Tambah Barang Baru</h3>
@@ -253,7 +253,7 @@
                     <div class="import-card" style="margin-bottom: 25px;">
                         <div class="import-label">
                             <span style="font-size: 1.5rem;">📊</span>
-                            <span>Update Stok:</span>
+                            <span>Update Stock:</span>
                         </div>
                         <div class="file-input-wrapper">
                             <input type="file" id="excel-input" accept=".xlsx, .xls" class="file-input-hidden"
@@ -312,56 +312,45 @@
                     <h2>Barang Masuk</h2>
                     <div class="card add-item-card" style="margin-bottom: 30px;">
                         <h3 style="margin-bottom: 20px;">📥 Input Barang Masuk</h3>
-                        <form id="incoming-form" onsubmit="addIncomingGoods(event)">
-                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
-                                <div class="form-group">
-                                    <label>Tanggal:</label>
-                                    <input type="date" id="incoming-date" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Nama Barang:</label>
-                                    <div class="autocomplete-wrapper">
-                                        <input type="text" id="incoming-item-name" placeholder="Cari barang..." required
-                                            autocomplete="off">
-                                        <div class="custom-dropdown" id="incoming-item-dropdown"></div>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label>Supplier:</label>
-                                    <input type="text" id="incoming-supplier" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Jumlah Barang:</label>
-                                    <input type="number" id="incoming-qty" min="0" step="any" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Jumlah Pembayaran (Rp):</label>
-                                    <input type="number" id="incoming-payment" min="0" step="any" required>
-                                </div>
+                        <form id="incoming-form" onsubmit="addIncomingTransaction(event)">
+                            <div class="form-group">
+                                <label>Tanggal:</label>
+                                <input type="date" id="incoming-date" required>
                             </div>
-                            <button type="submit" class="add-customer-button" style="margin-top: 15px;">+ Simpan Barang
+                            <div class="form-group">
+                                <label>Nama Supplier:</label>
+                                <input type="text" id="incoming-supplier" placeholder="Masukkan nama supplier..."
+                                    required>
+                            </div>
+
+                            <h4 style="margin-top: 20px; margin-bottom: 10px;">Daftar Barang</h4>
+                            <div id="incoming-items-list"></div>
+                            <button type="button" class="row-btn btn-add" onclick="addIncomingRow()"
+                                style="margin-top: 10px;">+</button>
+
+                            <button type="submit" class="add-customer-button" style="margin-top: 25px;">Simpan Barang
                                 Masuk</button>
+                            <button type="button" id="cancel-incoming-edit" class="cancel-edit-button"
+                                style="display: none; margin-top: 10px;" onclick="cancelIncomingEdit()">Batalkan
+                                Edit</button>
                         </form>
                     </div>
 
                     <div class="stock-controls" style="margin-bottom: 15px;">
                         <h3 style="margin-bottom: 0;">Riwayat Barang Masuk</h3>
-                        <button onclick="downloadIncomingExcel()" class="download-button">
-                            <span>📥</span> Download Pilihan (Excel)
-                        </button>
+                        <div class="search-group">
+                            <input type="text" id="incoming-search-input" placeholder="Cari nama barang di riwayat..."
+                                oninput="renderIncomingTable()">
+                        </div>
                     </div>
 
                     <table id="incoming-table">
                         <thead>
                             <tr>
                                 <th>Tanggal</th>
-                                <th>Nama Barang</th>
                                 <th>Supplier</th>
-                                <th>Jumlah</th>
-                                <th>Pembayaran</th>
+                                <th style="text-align: center;">Rincian Pesanan</th>
                                 <th style="text-align: center;">Aksi</th>
-                                <th style="text-align: center;"><input type="checkbox" id="incoming-select-all"
-                                        onclick="toggleSelectAll('incoming')"></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -373,46 +362,39 @@
                     <h2>Barang Keluar</h2>
                     <div class="card add-item-card" style="margin-bottom: 30px;">
                         <h3 style="margin-bottom: 20px;">📤 Input Barang Keluar</h3>
-                        <form id="outgoing-form" onsubmit="addOutgoingGoods(event)">
-                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
-                                <div class="form-group">
-                                    <label>Tanggal:</label>
-                                    <input type="date" id="outgoing-date" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Nama Barang:</label>
-                                    <div class="autocomplete-wrapper">
-                                        <input type="text" id="outgoing-item-name" placeholder="Cari barang..." required
-                                            autocomplete="off">
-                                        <div class="custom-dropdown" id="outgoing-item-dropdown"></div>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label>Jumlah Barang:</label>
-                                    <input type="number" id="outgoing-qty" min="0" step="any" required>
-                                </div>
+                        <form id="outgoing-form" onsubmit="addOutgoingTransaction(event)">
+                            <div class="form-group">
+                                <label>Tanggal:</label>
+                                <input type="date" id="outgoing-date" required>
                             </div>
-                            <button type="submit" class="add-customer-button" style="margin-top: 15px;">- Simpan Barang
+
+                            <h4 style="margin-top: 20px; margin-bottom: 10px;">Daftar Barang</h4>
+                            <div id="outgoing-items-list"></div>
+                            <button type="button" class="row-btn btn-add" onclick="addOutgoingRow()"
+                                style="margin-top: 10px;">+</button>
+
+                            <button type="submit" class="add-customer-button" style="margin-top: 25px;">Simpan Barang
                                 Keluar</button>
+                            <button type="button" id="cancel-outgoing-edit" class="cancel-edit-button"
+                                style="display: none; margin-top: 10px;" onclick="cancelOutgoingEdit()">Batalkan
+                                Edit</button>
                         </form>
                     </div>
 
                     <div class="stock-controls" style="margin-bottom: 15px;">
                         <h3 style="margin-bottom: 0;">Riwayat Barang Keluar</h3>
-                        <button onclick="downloadOutgoingExcel()" class="download-button">
-                            <span>📥</span> Download Pilihan (Excel)
-                        </button>
+                        <div class="search-group">
+                            <input type="text" id="outgoing-search-input" placeholder="Cari nama barang di riwayat..."
+                                oninput="renderOutgoingTable()">
+                        </div>
                     </div>
 
                     <table id="outgoing-table">
                         <thead>
                             <tr>
-                                <th>Tanggal</th>
-                                <th>Nama Barang</th>
-                                <th>Jumlah</th>
+                                <th style="width: 150px;">Tanggal</th>
+                                <th style="text-align: center;">Rincian Pesanan</th>
                                 <th style="text-align: center;">Aksi</th>
-                                <th style="text-align: center;"><input type="checkbox" id="outgoing-select-all"
-                                        onclick="toggleSelectAll('outgoing')"></th>
                             </tr>
                         </thead>
                         <tbody>
