@@ -10,6 +10,12 @@ var currentSortOrder = 'newest';
 var itemRowCounter = 0;
 var editingInvoiceId = null;
 
+// --- UTILITIES ---
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+window.escapeRegExp = escapeRegExp;
+
 // EMERGENCY ERROR TRACKING
 // Disabled - using try-catch instead
 // window.onerror = function (msg, url, line) {
@@ -222,11 +228,13 @@ function syncUI() {
     if (activeScreen.id === 'supplier-data') renderSupplierTable();
     if (activeScreen.id === 'print-invoice') renderInvoicesList();
     if (activeScreen.id === 'create-invoice') {
-        loadCustomerOptions();
-        loadStockDatalist();
+        try {
+            if (typeof setupCustomerAutocomplete === 'function') setupCustomerAutocomplete();
+            if (typeof loadStockDatalist === 'function') loadStockDatalist();
+        } catch (e) { console.error("SyncUI create-invoice error:", e); }
     }
     if (activeScreen.id === 'home-screen') {
-        updateDashboardStats();
+        if (typeof updateDashboardStats === 'function') updateDashboardStats();
     }
     if (activeScreen.id === 'incoming-goods') renderIncomingTable();
     if (activeScreen.id === 'outgoing-goods') renderOutgoingTable();
@@ -235,13 +243,26 @@ function syncUI() {
 // --- UTILITY FUNCTIONS (Adapted for Firebase) ---
 
 function getData(key) {
-    return dbData[key];
+    if (!dbData) return (['stock', 'invoices', 'incoming', 'outgoing'].includes(key)) ? [] : {};
+    const data = dbData[key];
+
+    // Safety check for common array-like data in Firebase
+    if (['stock', 'invoices', 'incoming', 'outgoing'].includes(key)) {
+        if (data === null || data === undefined) return [];
+        if (Array.isArray(data)) return data;
+        if (typeof data === 'object') return Object.values(data);
+        return [];
+    }
+
+    // Customers and Suppliers are objects by design
+    return data || {};
 }
 window.getData = getData;
 
 function saveData(key, data) {
-    dbData[key] = data;
-    db.ref(key).set(data);
+    if (db && db.ref) {
+        db.ref(key).set(data).catch(err => console.error(`Error saving ${key}:`, err));
+    }
 }
 window.saveData = saveData;
 
@@ -456,18 +477,7 @@ function showScreen(screenId) {
 
     // 3. Load Specific Data
     if (screenId === 'create-invoice') {
-        try {
-            // loadCustomerOptions(); // Replaced
-            setupCustomerAutocomplete(); // Initialize autocomplete
-            loadStockDatalist();
-            updateInvoiceDate(); // Update tanggal nota
-            restoreFormData();
-            updateCustomerDetails();
-            calculateTotalAmount();
-        } catch (error) {
-            console.error('Error saat membuka halaman Buat Nota:', error);
-            showAlert('Error saat membuka halaman: ' + error.message);
-        }
+        initializeInvoiceScreen();
     } else if (screenId === 'stock-management') {
         renderStockTable();
         checkLowStock();
@@ -482,19 +492,53 @@ function showScreen(screenId) {
     } else if (screenId === 'home-screen') {
         updateDashboardStats();
     } else if (screenId === 'incoming-goods') {
-        document.getElementById('incoming-date').valueAsDate = new Date();
+        if (document.getElementById('incoming-date')) document.getElementById('incoming-date').valueAsDate = new Date();
         if (typeof initTransactionForms === 'function') initTransactionForms();
         renderIncomingTable();
         // Initialize autocomplete for history search
         setupGeneralAutocomplete('incoming-search-input', 'dropdown-history-incoming', () => renderIncomingTable());
     } else if (screenId === 'outgoing-goods') {
-        document.getElementById('outgoing-date').valueAsDate = new Date();
+        if (document.getElementById('outgoing-date')) document.getElementById('outgoing-date').valueAsDate = new Date();
         if (typeof initTransactionForms === 'function') initTransactionForms();
         renderOutgoingTable();
         // Initialize autocomplete for history search
         setupGeneralAutocomplete('outgoing-search-input', 'dropdown-history-outgoing', () => renderOutgoingTable());
     }
 }
+window.showScreen = showScreen;
+
+function initializeInvoiceScreen() {
+    try {
+        // Setup Customer Autocomplete
+        if (typeof setupCustomerAutocomplete === 'function') setupCustomerAutocomplete();
+
+        // Load additional data
+        try { if (typeof loadStockDatalist === 'function') loadStockDatalist(); } catch (e) { console.warn(e); }
+        try { if (typeof updateInvoiceDate === 'function') updateInvoiceDate(); } catch (e) { console.warn(e); }
+
+        // Restore form or add initial row
+        try {
+            restoreFormData();
+        } catch (e) {
+            console.warn("Restore error, adding default row:", e);
+            const container = document.getElementById('items-list');
+            if (container && container.innerHTML.trim() === '') {
+                addItemRow();
+            }
+        }
+
+        try { if (typeof updateCustomerDetails === 'function') updateCustomerDetails(); } catch (e) { console.warn(e); }
+        try { if (typeof calculateTotalAmount === 'function') calculateTotalAmount(); } catch (e) { console.warn(e); }
+
+    } catch (error) {
+        console.error('CRITICAL: Error initializing invoice screen:', error);
+    }
+}
+
+function loadCustomerOptions() {
+    setupCustomerAutocomplete();
+}
+window.loadCustomerOptions = loadCustomerOptions;
 
 // --- UPDATE DASHBOARD STATISTICS ---
 function updateDashboardStats() {
@@ -585,6 +629,8 @@ function setupCustomerAutocomplete() {
     const dropdown = document.getElementById('customer-dropdown');
 
     if (!input || !dropdown) return;
+    if (input.dataset.bound) return; // Prevent multiple bindings
+    input.dataset.bound = "true";
 
     let currentFocus = -1;
 
@@ -602,7 +648,8 @@ function setupCustomerAutocomplete() {
         }
 
         let matchCount = 0;
-        const keys = Object.keys(customers).sort();
+        // Get keys and filter out any non-string keys just in case
+        const keys = Object.keys(customers).filter(k => typeof k === 'string').sort((a, b) => a.localeCompare(b));
 
         keys.forEach(key => {
             const cust = customers[key];
@@ -613,19 +660,19 @@ function setupCustomerAutocomplete() {
             }
 
             // Search ONLY in Name as requested
-            const searchStr = cleanName.toLowerCase();
+            const searchStr = (cleanName || "").toLowerCase();
 
-            if (searchStr.includes(val.toLowerCase())) {
+            if (searchStr.includes((val || "").toLowerCase())) {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'dropdown-item';
 
-                const regex = new RegExp(`(${val})`, 'gi');
-                const nameHtml = cleanName.replace(regex, '<span class="match-text">$1</span>');
+                const escapedVal = escapeRegExp(val);
+                const nameHtml = escapedVal ? cleanName.replace(new RegExp(`(${escapedVal})`, 'gi'), '<span class="match-text">$1</span>') : cleanName;
 
                 itemDiv.innerHTML = `
                     <div style="display:flex; flex-direction:column;">
                         <span style="font-weight:600;">${nameHtml}</span>
-                        <span style="font-size:0.8rem; color:gray;">${cust.city} - ${cust.phone}</span>
+                        <span style="font-size:0.8rem; color:gray;">${(cust.city || '-')} - ${(cust.phone || '-')}</span>
                     </div>
                 `;
 
@@ -645,6 +692,14 @@ function setupCustomerAutocomplete() {
             dropdown.classList.add('show');
         } else {
             dropdown.classList.remove('show');
+        }
+    });
+
+    // Show on focus if not empty
+    input.addEventListener('focus', function () {
+        if (this.value) {
+            const event = new Event('input', { bubbles: true });
+            this.dispatchEvent(event);
         }
     });
 
@@ -686,8 +741,8 @@ function loadStockDatalist() {
     if (!datalist) return;
     datalist.innerHTML = '';
 
-    // Urutkan barang A-Z
-    const sortedStock = [...stock].sort((a, b) => a.name.localeCompare(b.name));
+    // Urutkan barang A-Z - SAFE
+    const sortedStock = [...stock].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
     sortedStock.forEach(item => {
         const option = document.createElement('option');
@@ -794,14 +849,17 @@ function addItemRow() {
 
 function setupAutocomplete(input, rowId) {
     const dropdown = document.getElementById(`dropdown-${rowId}`);
+    if (!input || !dropdown) return;
+    if (input.dataset.bound) return; // Prevent multiple bindings
+    input.dataset.bound = "true";
     let currentFocus = -1;
 
     input.addEventListener('input', function () {
         const val = this.value;
         const stock = getData('stock');
 
-        // Sort stock A-Z
-        const sortedStock = [...stock].sort((a, b) => a.name.localeCompare(b.name));
+        // Sort stock A-Z - SAFE
+        const sortedStock = [...stock].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
         dropdown.innerHTML = '';
         currentFocus = -1;
@@ -812,23 +870,32 @@ function setupAutocomplete(input, rowId) {
             // allowing empty search usually isn't desired for invoice, but let's allow it to show A-Z list if clicked
         }
 
-        let matchCount = 0;
+        let matchCount = 0; // Initialize matchCount here
         sortedStock.forEach(item => {
+            const itemName = item.name || "";
+            const searchVal = (val || "").toLowerCase().trim();
             // Check if matches or if input is empty (to show all on focus)
-            if (item.name.toLowerCase().includes(val.toLowerCase()) || val === '') {
+            if (itemName.toLowerCase().includes(searchVal) || searchVal === '') {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'dropdown-item';
 
-                // Highlight matching text
-                const regex = new RegExp(`(${val})`, 'gi');
-                const nameHtml = item.name.replace(regex, '<span class="match-text">$1</span>');
+                // Safe Regex Highlighting
+                let nameHtml = itemName;
+                if (searchVal !== '') {
+                    try {
+                        const escapedVal = escapeRegExp(searchVal);
+                        const regex = new RegExp(`(${escapedVal})`, 'gi');
+                        nameHtml = itemName.replace(regex, '<span class="match-text">$1</span>');
+                    } catch (e) { console.warn("Regex highlighting failed", e); }
+                }
 
                 itemDiv.innerHTML = `<span>${nameHtml}</span>`;
 
-                itemDiv.addEventListener('click', function () {
-                    input.value = item.name;
+                itemDiv.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    input.value = itemName;
                     closeAllDropdowns();
-                    updateItemDetails(input); // Trigger update
+                    if (typeof updateItemDetails === 'function') updateItemDetails(input);
                 });
 
                 dropdown.appendChild(itemDiv);
@@ -884,14 +951,25 @@ function setupAutocomplete(input, rowId) {
 function closeAllDropdowns(elmnt) {
     const dropdowns = document.getElementsByClassName('custom-dropdown');
     for (let i = 0; i < dropdowns.length; i++) {
-        if (elmnt != dropdowns[i] && elmnt != dropdowns[i].previousElementSibling) {
-            dropdowns[i].classList.remove('show');
+        const dropdown = dropdowns[i];
+        // Safely check if elmnt is a Node before calling contains
+        const isOutside = !elmnt || (
+            elmnt != dropdown &&
+            elmnt != dropdown.previousElementSibling &&
+            (typeof dropdown.contains === 'function' ? !dropdown.contains(elmnt) : true)
+        );
+
+        if (isOutside) {
+            dropdown.classList.remove('show');
         }
     }
 }
 
 document.addEventListener('click', function (e) {
-    closeAllDropdowns(e.target);
+    // Only close if we clicked outside autocomplete-wrapper
+    if (!e.target.closest('.autocomplete-wrapper')) {
+        closeAllDropdowns();
+    }
 });
 
 function removeItemRow(button) {
@@ -935,8 +1013,8 @@ function updateItemDetails(inputElement) {
     }
 
     const stock = getData('stock');
-    // Cari yang namanya sama persis (case insensitive)
-    const selectedItem = stock.find(item => item.name.toLowerCase() === itemName.toLowerCase());
+    // Cari yang namanya sama persis (case insensitive & trim)
+    const selectedItem = stock.find(item => (item.name || "").trim().toLowerCase() === itemName.toLowerCase());
 
     if (selectedItem) {
         // Jika ditemukan, paksa gunakan nama resmi agar seragam
@@ -958,19 +1036,32 @@ function updateItemDetails(inputElement) {
 
 
 function calculateTotalAmount() {
-    const rows = document.querySelectorAll('.item-row');
-    let grandTotal = 0;
+    const totalDisplay = document.getElementById('total-amount');
+    try {
+        const rows = document.querySelectorAll('.item-row');
+        let grandTotal = 0;
 
-    rows.forEach(row => {
-        const price = parseFloat(row.getAttribute('data-price') || '0');
-        const qty = parseFloat(row.querySelector('input[type="number"]').value || '0');
-        const subtotal = price * qty;
-        grandTotal += subtotal;
+        rows.forEach(row => {
+            const priceAttr = row.getAttribute('data-price') || '0';
+            const price = parseFloat(priceAttr);
 
-        row.querySelector('.item-subtotal-display').value = formatRupiah(subtotal);
-    });
+            const qtyInput = row.querySelector('input[name^="item-qty-"]');
+            const qty = qtyInput ? parseFloat(qtyInput.value || '0') : 0;
 
-    document.getElementById('total-amount').textContent = `Total: ${formatRupiah(grandTotal)}`;
+            const subtotal = price * qty;
+            grandTotal += subtotal;
+
+            const subtotalInput = row.querySelector('.item-subtotal-display');
+            if (subtotalInput) {
+                subtotalInput.value = formatRupiah(subtotal);
+            }
+        });
+
+        if (totalDisplay) totalDisplay.textContent = `Total: ${formatRupiah(grandTotal)}`;
+    } catch (error) {
+        console.error('Error calculating total:', error);
+        if (totalDisplay) totalDisplay.textContent = 'Total: Rp 0 (Error)';
+    }
 }
 
 document.getElementById('invoice-form').addEventListener('submit', function (event) {
@@ -1297,10 +1388,10 @@ function renderStockTable() {
         });
     }
 
-    // 2. Sort
+    // 2. Sort - SAFE
     displayStock.sort((a, b) => {
-        const nameA = a.name.toLowerCase();
-        const nameB = b.name.toLowerCase();
+        const nameA = (a.name || "").toLowerCase();
+        const nameB = (b.name || "").toLowerCase();
         if (currentStockSortOrder === 'az') {
             return nameA.localeCompare(nameB);
         } else {
@@ -3027,7 +3118,7 @@ function setupGeneralAutocomplete(inputId, dropdownId, onSelect = null) {
         const filtered = stock.filter(item => item.name.toLowerCase().includes(trimmedFilter.toLowerCase()));
 
         if (filtered.length === 0 || trimmedFilter === '') {
-            dropdown.style.display = 'none';
+            dropdown.classList.remove('show');
             return;
         }
 
@@ -3036,32 +3127,24 @@ function setupGeneralAutocomplete(inputId, dropdownId, onSelect = null) {
             div.className = 'dropdown-item';
 
             // Highlight Match - escape special regex characters
-            const escapedFilter = trimmedFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`(${escapedFilter})`, 'gi');
-            const highlightedName = item.name.replace(regex, '<span class="match-text">$1</span>');
+            const escapedFilter = escapeRegExp(trimmedFilter);
+            const highlightedName = escapedFilter ? item.name.replace(new RegExp(`(${escapedFilter})`, 'gi'), '<span class="match-text">$1</span>') : item.name;
 
             div.innerHTML = `<span>${highlightedName}</span> <small style="opacity: 0.7;">(Stock: ${item.stock})</small>`;
 
             div.addEventListener('click', () => {
                 input.value = item.name;
                 if (onSelect) onSelect(item);
-                dropdown.style.display = 'none';
+                dropdown.classList.remove('show');
             });
 
             dropdown.appendChild(div);
         });
-        dropdown.style.display = 'block';
+        dropdown.classList.add('show');
     };
 
     input.addEventListener('input', () => showDropdown(input.value));
     input.addEventListener('focus', () => showDropdown(input.value));
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
-            dropdown.style.display = 'none';
-        }
-    });
 }
 
 // --- LOGIC BARANG MASUK (INCOMING) ---
@@ -3781,9 +3864,5 @@ function initTransactionForms() {
 window.initTransactionForms = initTransactionForms;
 window.setupGeneralAutocomplete = setupGeneralAutocomplete;
 
-// Global Click Listener for Custom Dropdowns
-window.addEventListener('click', function (e) {
-    if (!e.target.closest('.autocomplete-wrapper')) {
-        document.querySelectorAll('.custom-dropdown').forEach(d => d.style.display = 'none');
-    }
-});
+// Global Click Listener for Custom Dropdowns handled by closeAllDropdowns in common logic
+// (Removed conflicting listener that used .style.display)
