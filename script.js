@@ -378,7 +378,9 @@ function saveDraftInvoice() {
         items: []
     };
 
-    const itemRows = document.querySelectorAll('.item-row');
+    const itemsList = document.getElementById('items-list');
+    if (!itemsList) return;
+    const itemRows = itemsList.querySelectorAll('.item-row');
     itemRows.forEach(row => {
         const itemName = row.querySelector('.item-search-input').value;
         const qty = row.querySelector('input[type="number"]').value;
@@ -1000,7 +1002,8 @@ function updateItemDetails(inputElement) {
     if (!itemName) return;
 
     // FITUR: CEK BARANG DUPLIKAT
-    const allItemInputs = document.querySelectorAll('.item-search-input');
+    const itemsList = document.getElementById('items-list');
+    const allItemInputs = itemsList ? itemsList.querySelectorAll('.item-search-input') : [];
     for (let otherInput of allItemInputs) {
         if (otherInput !== inputElement && otherInput.value.trim().toLowerCase() === itemName.toLowerCase()) {
             showAlert('⚠️ Barang ini sudah ada di daftar pesanan! Harap edit jumlahnya saja.');
@@ -1038,7 +1041,8 @@ function updateItemDetails(inputElement) {
 function calculateTotalAmount() {
     const totalDisplay = document.getElementById('total-amount');
     try {
-        const rows = document.querySelectorAll('.item-row');
+        const itemsList = document.getElementById('items-list');
+        const rows = itemsList ? itemsList.querySelectorAll('.item-row') : [];
         let grandTotal = 0;
 
         rows.forEach(row => {
@@ -1119,7 +1123,7 @@ function processInvoiceInternal() {
     try {
         const form = document.getElementById('invoice-form');
         const customerSearchInput = document.getElementById('customer-search-input');
-        const expeditionInput = form ? form['expedition'] : null;
+        const expeditionInput = document.getElementById('expedition');
         const errorDiv = document.getElementById('stock-error');
 
         // Null checks
@@ -1176,7 +1180,12 @@ function processInvoiceInternal() {
         }
 
         const items = [];
-        const itemRows = document.querySelectorAll('.item-row');
+        const itemsList = document.getElementById('items-list');
+        if (!itemsList) {
+            showAlert('Error: Daftar item tidak ditemukan.');
+            return;
+        }
+        const itemRows = itemsList.querySelectorAll('.item-row');
         let grandTotal = 0;
         let isStockSufficient = true;
         const newStockUpdates = {}; // Untuk menyimpan perubahan stock jika valid
@@ -1283,8 +1292,10 @@ function processInvoiceInternal() {
 
         // 4. Simpan Nota
         const invoices = getData('invoices');
-        const city = document.getElementById('customer-city').value;
-        const phone = document.getElementById('customer-phone').value;
+        const cityEl = document.getElementById('customer-city');
+        const phoneEl = document.getElementById('customer-phone');
+        const city = cityEl ? cityEl.value : '';
+        const phone = phoneEl ? phoneEl.value : '';
 
         if (editingInvoiceId !== null) {
             // MODE EDIT: Update existing invoice
@@ -1332,7 +1343,6 @@ function processInvoiceInternal() {
         // 5. Reset Form dan Kembali ke Home
         if (form) form.reset();
 
-        const itemsList = document.getElementById('items-list');
         if (itemsList) itemsList.innerHTML = ''; // Hapus semua baris item
 
         // Hide cancel edit button
