@@ -3186,27 +3186,40 @@ function addIncomingRow(data = null) {
         </div>
         <div class="form-group" style="margin-bottom:0;">
             <label style="font-size:0.85em;">Jumlah</label>
-            <input type="number" class="incoming-item-qty" min="0" step="any" required placeholder="0" value="1">
+            <input type="number" class="incoming-item-qty" min="0" step="any" required placeholder="0" value="1" oninput="calculateIncomingRowTotal(this)" onkeyup="calculateIncomingRowTotal(this)" onchange="calculateIncomingRowTotal(this)">
         </div>
         <div class="form-group" style="margin-bottom:0;">
             <label style="font-size:0.85em;">Satuan</label>
             <input type="text" class="incoming-item-unit" placeholder="Pcs">
         </div>
         <div class="form-group" style="margin-bottom:0;">
-            <label style="font-size:0.85em;">Harga</label>
-            <input type="number" class="incoming-item-price" min="0" step="any" required placeholder="Rp">
+            <label style="font-size:0.85em;">HPP</label>
+            <input type="number" class="incoming-item-hpp" min="0" step="any" required placeholder="Rp" oninput="calculateIncomingRowTotal(this)" onkeyup="calculateIncomingRowTotal(this)" onchange="calculateIncomingRowTotal(this)">
         </div>
-        <button type="button" class="delete-button" onclick="removeTransactionRow(this)" style="margin-bottom:2px; height:38px; padding:0 12px; min-width: 40px; background: #ef4444; color: white; border: none; border-radius: 6px;">×</button>
+        <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.85em;">Total Harga</label>
+            <input type="number" class="incoming-item-total" min="0" step="any" required placeholder="Rp" oninput="calculateIncomingGrandTotal()" onkeyup="calculateIncomingGrandTotal()" onchange="calculateIncomingGrandTotal()">
+        </div>
+        <button type="button" class="delete-button" onclick="removeTransactionRow(this); calculateIncomingGrandTotal();" style="margin-bottom:2px; height:38px; padding:0 12px; min-width: 40px; background: #ef4444; color: white; border: none; border-radius: 6px;">×</button>
     `;
+    row.style.gridTemplateColumns = '2fr 0.7fr 0.7fr 1fr 1.2fr auto'; // Updated Grid: Name, Qty, Unit, HPP, Total, Action
 
     container.appendChild(row);
 
     // Setup Autocomplete
     const nameInput = row.querySelector('.incoming-item-name');
     const unitInput = row.querySelector('.incoming-item-unit');
+    const hppInput = row.querySelector('.incoming-item-hpp');
+    const qtyInput = row.querySelector('.incoming-item-qty');
 
     setupGeneralAutocomplete(`incoming-name-${incomingRowCounter}`, `dropdown-incoming-${incomingRowCounter}`, (item) => {
         if (item.unit) unitInput.value = item.unit;
+        if (item.hpp) {
+            hppInput.value = item.hpp;
+        } else {
+            hppInput.value = 0;
+        }
+        calculateIncomingRowTotal(nameInput); // Trigger calculation
     });
 
     // Populate data if provided (for Edit)
@@ -3214,10 +3227,37 @@ function addIncomingRow(data = null) {
         nameInput.value = data.name;
         row.querySelector('.incoming-item-qty').value = data.qty;
         unitInput.value = data.unit || '';
-        row.querySelector('.incoming-item-price').value = data.price;
+        row.querySelector('.incoming-item-hpp').value = data.hpp || 0;
+        row.querySelector('.incoming-item-total').value = data.total || 0;
     }
 
     updateTransactionRowButtons(container);
+    calculateIncomingGrandTotal();
+}
+
+function calculateIncomingRowTotal(inputElement) {
+    const row = inputElement.closest('.item-row');
+    const qty = parseFloat(row.querySelector('.incoming-item-qty').value) || 0;
+    const hpp = parseFloat(row.querySelector('.incoming-item-hpp').value) || 0;
+    const totalInput = row.querySelector('.incoming-item-total');
+
+    // Auto-calculate Total = HPP * Qty
+    const total = hpp * qty;
+    totalInput.value = total;
+
+    calculateIncomingGrandTotal();
+}
+
+function calculateIncomingGrandTotal() {
+    const rows = document.querySelectorAll('#incoming-items-list .item-row');
+    let grandTotal = 0;
+    rows.forEach(row => {
+        const total = parseFloat(row.querySelector('.incoming-item-total').value) || 0;
+        grandTotal += total;
+    });
+
+    const display = document.getElementById('incoming-grand-total');
+    if (display) display.textContent = formatRupiah(grandTotal);
 }
 
 function addIncomingTransaction(event) {
@@ -3242,14 +3282,17 @@ function addIncomingTransaction(event) {
         const name = row.querySelector('.incoming-item-name').value.trim();
         const qty = parseFloat(row.querySelector('.incoming-item-qty').value);
         const unit = row.querySelector('.incoming-item-unit').value.trim();
-        const price = parseFloat(row.querySelector('.incoming-item-price').value);
+        const hpp = parseFloat(row.querySelector('.incoming-item-hpp').value);
+        const total = parseFloat(row.querySelector('.incoming-item-total').value);
 
         if (name) { // Only process rows with name
             itemsFound = true;
-            if (isNaN(qty) || isNaN(price)) {
+            if (isNaN(qty) || isNaN(hpp) || isNaN(total)) {
                 isValid = false;
             }
-            items.push({ name, qty, unit, price });
+            // Save as { name, qty, unit, hpp, total }
+            // Note: 'price' field legacy is mapped to 'total' conceptually in display, but let's keep clean names
+            items.push({ name, qty, unit, hpp, total });
         }
     });
 
@@ -3371,7 +3414,10 @@ function showIncomingDetail(id) {
     const trans = history.find(t => t.id === id);
     if (!trans) return;
 
-    const items = trans.items || [{ name: trans.name, qty: trans.qty, unit: 'Pcs', price: trans.payment || 0 }]; // Legacy fallback
+    const items = trans.items || [{ name: trans.name, qty: trans.qty, unit: 'Pcs', hpp: trans.payment || 0, total: (trans.payment || 0) * (trans.qty || 0) }]; // Handle legacy
+
+    let grandTotal = 0;
+    items.forEach(i => grandTotal += (i.total || (i.price * i.qty) || 0));
 
     const content = `
         <div style="margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
@@ -3384,8 +3430,8 @@ function showIncomingDetail(id) {
                     <th>Nama Barang</th>
                     <th>Jumlah</th>
                     <th>Satuan</th>
-                    <th>Harga</th>
-                    <th>Subtotal</th>
+                    <th>HPP</th>
+                    <th>Total Harga</th>
                 </tr>
             </thead>
             <tbody>
@@ -3394,10 +3440,14 @@ function showIncomingDetail(id) {
                         <td>${item.name}</td>
                         <td style="text-align:left;">${item.qty}</td>
                         <td style="text-align:left;">${item.unit || '-'}</td>
-                        <td style="text-align:left;">${formatRupiah(item.price || 0)}</td>
-                        <td style="text-align:left;">${formatRupiah((item.price || 0) * (item.qty || 0))}</td>
+                        <td style="text-align:left;">${formatRupiah(item.hpp || item.price || 0)}</td>
+                        <td style="text-align:left;">${formatRupiah(item.total || ((item.hpp || item.price || 0) * item.qty) || 0)}</td>
                     </tr>
                 `).join('')}
+                <tr style="font-weight: bold; border-top: 2px solid var(--primary-color);">
+                    <td colspan="4" style="text-align: right; color: var(--text-primary) !important; padding-top: 15px;">Total Semua:</td>
+                    <td style="color: var(--text-primary) !important; padding-top: 15px;">${formatRupiah(grandTotal)}</td>
+                </tr>
             </tbody>
         </table>
         
@@ -3436,7 +3486,7 @@ function editIncomingTransaction(id) {
     container.innerHTML = '';
 
     // Add rows
-    const items = trans.items || [{ name: trans.name, qty: trans.qty, unit: 'Pcs', price: trans.payment }];
+    const items = trans.items || [{ name: trans.name, qty: trans.qty, unit: 'Pcs', hpp: trans.payment, total: trans.payment * trans.qty }];
     items.forEach(item => addIncomingRow(item));
 
     // Show Cancel Button
@@ -3469,9 +3519,26 @@ function downloadIncomingTransaction(id) {
         'Nama Barang': item.name,
         Jumlah: String(item.qty),
         Satuan: item.unit || '-',
-        Harga: String(item.price || 0),
-        Total: String((item.price || 0) * (item.qty || 0))
+        HPP: String(item.hpp || item.price || 0),
+        Total: String(item.total || ((item.hpp || item.price || 0) * item.qty) || 0)
     }));
+
+    // Calculate Grand Total
+    let grandTotal = 0;
+    items.forEach(item => {
+        grandTotal += item.total || ((item.hpp || item.price || 0) * item.qty) || 0;
+    });
+
+    // Add Total Semua row
+    dataToExport.push({
+        Tanggal: '',
+        Supplier: '',
+        'Nama Barang': '',
+        Jumlah: '',
+        Satuan: '',
+        HPP: 'TOTAL SEMUA:',
+        Total: String(grandTotal)
+    });
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
 
@@ -3482,7 +3549,7 @@ function downloadIncomingTransaction(id) {
         { wch: 30 }, // Nama Barang
         { wch: 10 }, // Jumlah
         { wch: 10 }, // Satuan
-        { wch: 15 }, // Harga
+        { wch: 15 }, // HPP
         { wch: 15 }  // Total
     ];
     ws['!cols'] = wscols;
@@ -3538,23 +3605,77 @@ function addOutgoingRow(data = null) {
         </div>
         <div class="form-group" style="margin-bottom:0;">
             <label style="font-size:0.85em;">Jumlah</label>
-            <input type="number" class="outgoing-item-qty" min="0" step="any" required placeholder="0" value="1">
+            <input type="number" class="outgoing-item-qty" min="0" step="any" required placeholder="0" value="1" oninput="calculateOutgoingRowTotal(this)" onkeyup="calculateOutgoingRowTotal(this)" onchange="calculateOutgoingRowTotal(this)">
         </div>
-        <button type="button" class="delete-button" onclick="removeTransactionRow(this)" style="margin-bottom:2px; height:38px; padding:0 12px; min-width: 40px; background: #ef4444; color: white; border: none; border-radius: 6px;">×</button>
+         <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.85em;">Satuan</label>
+            <input type="text" class="outgoing-item-unit" placeholder="Pcs">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.85em;">HPP</label>
+            <input type="number" class="outgoing-item-hpp" min="0" step="any" required placeholder="Rp" oninput="calculateOutgoingRowTotal(this)" onkeyup="calculateOutgoingRowTotal(this)" onchange="calculateOutgoingRowTotal(this)">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:0.85em;">Total Harga</label>
+            <input type="number" class="outgoing-item-total" min="0" step="any" required placeholder="Rp" oninput="calculateOutgoingGrandTotal()" onkeyup="calculateOutgoingGrandTotal()" onchange="calculateOutgoingGrandTotal()">
+        </div>
+        <button type="button" class="delete-button" onclick="removeTransactionRow(this); calculateOutgoingGrandTotal();" style="margin-bottom:2px; height:38px; padding:0 12px; min-width: 40px; background: #ef4444; color: white; border: none; border-radius: 6px;">×</button>
     `;
+    row.style.gridTemplateColumns = '2fr 0.7fr 0.7fr 1fr 1.2fr auto'; // Updated Grid
 
     container.appendChild(row);
 
     // Setup Autocomplete
-    setupGeneralAutocomplete(`outgoing-name-${outgoingRowCounter}`, `dropdown-outgoing-${outgoingRowCounter}`);
+    const nameInput = row.querySelector('.outgoing-item-name');
+    const unitInput = row.querySelector('.outgoing-item-unit');
+    const hppInput = row.querySelector('.outgoing-item-hpp');
+
+    setupGeneralAutocomplete(`outgoing-name-${outgoingRowCounter}`, `dropdown-outgoing-${outgoingRowCounter}`, (item) => {
+        if (item.unit) unitInput.value = item.unit;
+        if (item.hpp) {
+            hppInput.value = item.hpp;
+        } else {
+            hppInput.value = 0;
+        }
+        calculateOutgoingRowTotal(nameInput);
+    });
 
     // Populate data
     if (data) {
         row.querySelector('.outgoing-item-name').value = data.name;
         row.querySelector('.outgoing-item-qty').value = data.qty;
+        if (data.unit) unitInput.value = data.unit;
+        if (data.hpp !== undefined) hppInput.value = data.hpp;
+        if (data.total !== undefined) row.querySelector('.outgoing-item-total').value = data.total;
     }
 
     updateTransactionRowButtons(container);
+    calculateOutgoingGrandTotal();
+}
+
+function calculateOutgoingRowTotal(inputElement) {
+    const row = inputElement.closest('.item-row');
+    const qty = parseFloat(row.querySelector('.outgoing-item-qty').value) || 0;
+    const hpp = parseFloat(row.querySelector('.outgoing-item-hpp').value) || 0;
+    const totalInput = row.querySelector('.outgoing-item-total');
+
+    // Auto-calculate Total = HPP * Qty
+    const total = hpp * qty;
+    totalInput.value = total;
+
+    calculateOutgoingGrandTotal();
+}
+
+function calculateOutgoingGrandTotal() {
+    const rows = document.querySelectorAll('#outgoing-items-list .item-row');
+    let grandTotal = 0;
+    rows.forEach(row => {
+        const total = parseFloat(row.querySelector('.outgoing-item-total').value) || 0;
+        grandTotal += total;
+    });
+
+    const display = document.getElementById('outgoing-grand-total');
+    if (display) display.textContent = formatRupiah(grandTotal);
 }
 
 function addOutgoingTransaction(event) {
@@ -3598,6 +3719,9 @@ function addOutgoingTransaction(event) {
     itemRows.forEach(row => {
         const name = row.querySelector('.outgoing-item-name').value.trim();
         const qty = parseFloat(row.querySelector('.outgoing-item-qty').value);
+        const unit = row.querySelector('.outgoing-item-unit').value.trim();
+        const hpp = parseFloat(row.querySelector('.outgoing-item-hpp').value);
+        const total = parseFloat(row.querySelector('.outgoing-item-total').value);
 
         if (name) {
             itemsFound = true;
@@ -3619,7 +3743,7 @@ function addOutgoingTransaction(event) {
                 return;
             }
             itemUpdates[name] = currentDeduction;
-            items.push({ name, qty });
+            items.push({ name, qty, unit, hpp, total });
         }
     });
 
@@ -3725,6 +3849,9 @@ function showOutgoingDetail(id) {
 
     const items = trans.items || [{ name: trans.name, qty: trans.qty }];
 
+    let grandTotal = 0;
+    items.forEach(i => grandTotal += (i.total || ((i.hpp || 0) * i.qty) || 0));
+
     const content = `
         <div style="margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
             <p><strong>Tanggal:</strong> ${trans.date}</p>
@@ -3734,6 +3861,9 @@ function showOutgoingDetail(id) {
                 <tr>
                     <th>Nama Barang</th>
                     <th>Jumlah</th>
+                    <th>Satuan</th>
+                    <th>HPP</th>
+                    <th>Total Harga</th>
                 </tr>
             </thead>
             <tbody>
@@ -3741,8 +3871,15 @@ function showOutgoingDetail(id) {
                     <tr>
                         <td>${item.name}</td>
                         <td style="text-align:left;">${item.qty}</td>
+                        <td style="text-align:left;">${item.unit || '-'}</td>
+                        <td style="text-align:left;">${formatRupiah(item.hpp || 0)}</td>
+                        <td style="text-align:left;">${formatRupiah(item.total || ((item.hpp || 0) * item.qty) || 0)}</td>
                     </tr>
                 `).join('')}
+                <tr style="font-weight: bold; border-top: 2px solid var(--primary-color);">
+                    <td colspan="4" style="text-align: right; color: var(--text-primary) !important; padding-top: 15px;">Total Semua:</td>
+                    <td style="color: var(--text-primary) !important; padding-top: 15px;">${formatRupiah(grandTotal)}</td>
+                </tr>
             </tbody>
         </table>
         
@@ -3804,8 +3941,27 @@ function downloadOutgoingTransaction(id) {
     const dataToExport = items.map(item => ({
         Tanggal: trans.date,
         'Nama Barang': item.name,
-        Jumlah: String(item.qty)
+        Jumlah: String(item.qty),
+        Satuan: item.unit || '-',
+        HPP: String(item.hpp || 0),
+        Total: String(item.total || ((item.hpp || 0) * item.qty) || 0)
     }));
+
+    // Calculate Grand Total
+    let grandTotal = 0;
+    items.forEach(item => {
+        grandTotal += item.total || ((item.hpp || 0) * item.qty) || 0;
+    });
+
+    // Add Total Semua row
+    dataToExport.push({
+        Tanggal: '',
+        'Nama Barang': '',
+        Jumlah: '',
+        Satuan: '',
+        HPP: 'TOTAL SEMUA:',
+        Total: String(grandTotal)
+    });
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
 
@@ -3813,7 +3969,10 @@ function downloadOutgoingTransaction(id) {
     const wscols = [
         { wch: 15 }, // Tanggal
         { wch: 30 }, // Nama Barang
-        { wch: 10 }  // Jumlah
+        { wch: 10 }, // Jumlah
+        { wch: 10 }, // Satuan
+        { wch: 15 }, // HPP
+        { wch: 15 }  // Total
     ];
     ws['!cols'] = wscols;
 
@@ -3857,6 +4016,10 @@ window.downloadIncomingTransaction = downloadIncomingTransaction;
 window.downloadOutgoingTransaction = downloadOutgoingTransaction;
 window.deleteIncomingTransaction = deleteIncomingTransaction;
 window.deleteOutgoingTransaction = deleteOutgoingTransaction;
+window.calculateIncomingRowTotal = calculateIncomingRowTotal;
+window.calculateIncomingGrandTotal = calculateIncomingGrandTotal;
+window.calculateOutgoingRowTotal = calculateOutgoingRowTotal;
+window.calculateOutgoingGrandTotal = calculateOutgoingGrandTotal;
 
 // Init Rows on Load
 // We'll call this whenever screen is shown if rows are empty
