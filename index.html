@@ -328,6 +328,12 @@
                             <button type="button" class="row-btn btn-add" onclick="addIncomingRow()"
                                 style="margin-top: 10px;">+</button>
 
+                            <div class="total-section"
+                                style="margin-top: 20px; text-align: right; font-weight: bold; font-size: 1.2em;"
+                                onmouseover="calculateIncomingGrandTotal()" onclick="calculateIncomingGrandTotal()">
+                                Total Semua: <span id="incoming-grand-total">Rp 0</span>
+                            </div>
+
                             <button type="submit" class="add-customer-button" style="margin-top: 25px;">Simpan Barang
                                 Masuk</button>
                             <button type="button" id="cancel-incoming-edit" class="cancel-edit-button"
@@ -360,6 +366,12 @@
                         <tbody>
                         </tbody>
                     </table>
+
+
+                    <!-- Floating Back to Top Button -->
+                    <button onclick="scrollToTop()" class="back-to-top-btn" id="backToTopBtnIncoming">
+                        <span>↑</span> Go Back
+                    </button>
                 </div>
 
                 <div id="outgoing-goods" class="screen">
@@ -376,6 +388,12 @@
                             <div id="outgoing-items-list"></div>
                             <button type="button" class="row-btn btn-add" onclick="addOutgoingRow()"
                                 style="margin-top: 10px;">+</button>
+
+                            <div class="total-section"
+                                style="margin-top: 20px; text-align: right; font-weight: bold; font-size: 1.2em;"
+                                onmouseover="calculateOutgoingGrandTotal()" onclick="calculateOutgoingGrandTotal()">
+                                Total Semua: <span id="outgoing-grand-total">Rp 0</span>
+                            </div>
 
                             <button type="submit" class="add-customer-button" style="margin-top: 25px;">Simpan Barang
                                 Keluar</button>
@@ -408,6 +426,12 @@
                         <tbody>
                         </tbody>
                     </table>
+
+
+                    <!-- Floating Back to Top Button -->
+                    <button onclick="scrollToTop()" class="back-to-top-btn" id="backToTopBtnOutgoing">
+                        <span>↑</span> Go Back
+                    </button>
                 </div>
 
                 <div id="customer-data" class="screen">
@@ -594,6 +618,7 @@
     <script src="script.js"></script>
     <script src="theme.js"></script>
     <script src="detail_modal_functions.js"></script>
+    <script src="scroll-handler.js"></script>
 </body>
 
 </html>
