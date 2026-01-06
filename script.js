@@ -1549,6 +1549,13 @@ function processInvoiceInternal() {
                 };
 
                 saveData('invoices', invoices);
+
+                // FIX: Clear stale cache so the view updates with the new data from DB
+                localStorage.removeItem(`invoice_edit_${editingInvoiceId}`);
+                if (typeof invoiceEditCache !== 'undefined') {
+                    delete invoiceEditCache[editingInvoiceId];
+                }
+
                 showAlert(`Nota ${customerName} berhasil diperbarui!`);
 
                 // Reset editing mode
@@ -2725,6 +2732,13 @@ function deleteInvoice(invoiceId) {
     showConfirm(`Apakah Anda yakin ingin menghapus nota milik ${invoice.customer}?`, () => {
         invoices.splice(invoiceIndex, 1);
         saveData('invoices', invoices);
+
+        // FIX: Clear cache for deleted invoice
+        localStorage.removeItem(`invoice_edit_${invoiceId}`);
+        if (typeof invoiceEditCache !== 'undefined') {
+            delete invoiceEditCache[invoiceId];
+        }
+
         renderInvoicesList();
 
         try {
