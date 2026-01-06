@@ -61,6 +61,9 @@
                 <button class="nav-item" onclick="showScreen('stock-management')">
                     <span class="icon">📦</span> <span class="nav-label">Stock Barang</span>
                 </button>
+                <button class="nav-item" onclick="showScreen('low-stock-screen')">
+                    <span class="icon">⚠️</span> <span class="nav-label">Stock Menipis</span>
+                </button>
                 <button class="nav-item" onclick="showScreen('incoming-goods')">
                     <span class="icon">📥</span> <span class="nav-label">Barang Masuk</span>
                 </button>
@@ -306,6 +309,62 @@
                         </button>
                     </div>
 
+                </div>
+
+                <div id="low-stock-screen" class="screen">
+                    <h2>Peringatan Stock Menipis</h2>
+
+                    <div class="card" style="margin-bottom: 25px; border-left: 5px solid var(--danger-color);">
+                        <div style="display: flex; align-items: center; gap: 20px;">
+                            <div style="font-size: 2.5rem; color: var(--danger-color);">⚠️</div>
+                            <div>
+                                <h3 style="margin-bottom: 5px; color: var(--danger-color);">Perhatian Stock!</h3>
+                                <p style="color: var(--text-secondary);">Daftar barang di bawah ini telah mencapai atau
+                                    melewati batas minimum stock. Harap segera lakukan restock.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="stock-controls" style="margin-bottom: 20px;">
+                        <div class="search-group">
+                            <div class="custom-select-container" id="low-stock-search-container">
+                                <div class="custom-select-trigger" onclick="toggleLowStockCustomSelect()">
+                                    <span id="low-stock-custom-value">Nama Barang</span>
+                                    <span class="custom-arrow"></span>
+                                </div>
+                                <div class="custom-options" id="low-stock-options-list">
+                                    <div class="custom-option selected"
+                                        onclick="selectLowStockOption('name', 'Nama Barang')">Nama Barang</div>
+                                    <div class="custom-option" onclick="selectLowStockOption('supplier', 'Supplier')">
+                                        Supplier</div>
+                                </div>
+                                <input type="hidden" id="low-stock-search-mode" value="name">
+                            </div>
+                            <input type="text" id="low-stock-search" placeholder="Cari barang menipis..."
+                                oninput="renderLowStockMainTable()">
+                        </div>
+                        <button onclick="downloadLowStockExcel()" class="download-button"
+                            style="margin: 0; padding: 10px 20px; font-size: 0.9rem;">
+                            <span>📥</span> Download Data
+                        </button>
+                    </div>
+
+                    <table id="low-stock-main-table">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Nama Barang</th>
+                                <th>Supplier</th>
+                                <th style="text-align: center;">Stock Saat Ini</th>
+                                <th style="text-align: center;">Min. Stock</th>
+                                <th style="text-align: center;">Kekurangan</th>
+                                <th style="text-align: center;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Item low stock akan dirender di sini -->
+                        </tbody>
+                    </table>
                 </div>
 
                 <div id="incoming-goods" class="screen">
