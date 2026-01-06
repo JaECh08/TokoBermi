@@ -482,7 +482,9 @@ function showScreen(screenId) {
         initializeInvoiceScreen();
     } else if (screenId === 'stock-management') {
         renderStockTable();
-        checkLowStock();
+        // checkLowStock(); // Disable auto popup since we have a dedicated page now
+    } else if (screenId === 'low-stock-screen') {
+        renderLowStockMainTable();
     } else if (screenId === 'customer-data') {
         renderCustomerTable();
     } else if (screenId === 'supplier-data') {
@@ -506,6 +508,120 @@ function showScreen(screenId) {
         // Initialize autocomplete for history search
         setupGeneralAutocomplete('outgoing-search-input', 'dropdown-history-outgoing', () => renderOutgoingTable());
     }
+}
+
+function renderLowStockMainTable() {
+    const stock = getData('stock');
+    const tbody = document.getElementById('low-stock-main-table').querySelector('tbody');
+    const searchInput = document.getElementById('low-stock-search');
+    const searchValue = searchInput ? searchInput.value.toLowerCase() : '';
+
+    const searchMode = document.getElementById('low-stock-search-mode') ? document.getElementById('low-stock-search-mode').value : 'name';
+
+    tbody.innerHTML = '';
+
+    // Filter Items: Stock < MinStock
+    let lowStockItems = stock.filter(item => {
+        const stockVal = parseFloat(item.stock || 0);
+        const minStockVal = parseFloat(item.minStock || 0);
+        return stockVal < minStockVal;
+    });
+
+    // Apply Search Filter
+    if (searchValue) {
+        lowStockItems = lowStockItems.filter(item => {
+            if (searchMode === 'supplier') {
+                return item.supplier && item.supplier.toLowerCase().includes(searchValue);
+            }
+            return item.name.toLowerCase().includes(searchValue);
+        });
+    }
+
+    // Sort by Urgency (Highest Shortage Percentage relative to MinStock, or simply by Stock Level)
+    // Let's sort by Stock Level ascending (lowest stock first)
+    lowStockItems.sort((a, b) => (a.stock || 0) - (b.stock || 0));
+
+    if (lowStockItems.length === 0) {
+        const row = tbody.insertRow();
+        row.innerHTML = `<td colspan="7" style="text-align: center; padding: 30px; color: var(--text-secondary);">
+            ${searchValue ? 'Tidak ada barang menipis yang cocok dengan pencarian.' : '✅ Aman! Tidak ada barang yang stocknya menipis.'}
+        </td>`;
+        return;
+    }
+
+    lowStockItems.forEach((item, index) => {
+        const stockVal = parseFloat(item.stock || 0);
+        const minStockVal = parseFloat(item.minStock || 0);
+        const shortage = minStockVal - stockVal;
+
+        // Determine Status Label
+        let status = '⚠️ Menipis';
+        let statusColor = 'var(--accent-color)'; // Pink/Redish
+        let rowBg = '';
+
+        if (stockVal <= 0) {
+            status = '❌ Habis';
+            statusColor = 'var(--danger-color)';
+            rowBg = 'rgba(239, 68, 68, 0.05)';
+        }
+
+        const row = tbody.insertRow();
+        if (rowBg) row.style.backgroundColor = rowBg;
+
+        row.innerHTML = `
+            <td style="text-align: center;">${index + 1}</td>
+            <td style="font-weight: 600;">${item.name}</td>
+            <td>${item.supplier || '-'}</td>
+            <td style="text-align: center; color: ${statusColor}; font-weight: 700; font-size: 1.1rem;">${stockVal}</td>
+            <td style="text-align: center;">${minStockVal}</td>
+            <td style="text-align: center; font-weight: 600; color: var(--danger-color);">-${shortage}</td>
+            <td style="text-align: center;">
+                <span style="background-color: ${stockVal <= 0 ? '#fee2e2' : '#fce7f3'}; color: ${statusColor}; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; border: 1px solid currentColor;">
+                    ${status}
+                </span>
+            </td>
+        `;
+    });
+}
+
+function downloadLowStockExcel() {
+    const stock = getData('stock');
+    const lowStockItems = stock.filter(item => (item.stock || 0) < (item.minStock || 0));
+
+    if (lowStockItems.length === 0) {
+        showAlert('Tidak ada data stock menipis untuk didownload.');
+        return;
+    }
+
+    const excelData = lowStockItems.map((item, index) => ({
+        'No': index + 1,
+        'Nama Barang': item.name,
+        'Supplier': item.supplier,
+        'Stock Saat Ini': item.stock,
+        'Min Stock': item.minStock,
+        'Kekurangan': (item.minStock || 0) - (item.stock || 0),
+        'Status': (item.stock || 0) <= 0 ? 'Habis' : 'Menipis'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+    // Auto fit columns roughly
+    const wscols = [
+        { wch: 5 },
+        { wch: 30 },
+        { wch: 20 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 10 }
+    ];
+    worksheet['!cols'] = wscols;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Stock Menipis");
+
+    const date = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(workbook, `Laporan_Stock_Menipis_${date}.xlsx`);
 }
 window.showScreen = showScreen;
 
@@ -617,9 +733,80 @@ function checkLowStock() {
     const lowStockItems = stock.filter(item => item.stock < (item.minStock || 0));
 
     if (lowStockItems.length > 0) {
-        const itemNames = lowStockItems.map(item => item.name).join(', ');
-        showAlert(`Peringatan: Stock menipis untuk barang: ${itemNames}`);
+        showLowStockModal(lowStockItems);
     }
+}
+
+function showLowStockModal(lowStockItems) {
+    // Sort by stock level (lowest first)
+    const sortedItems = [...lowStockItems].sort((a, b) => (a.stock || 0) - (b.stock || 0));
+
+    const content = `
+        <div class="detail-stats-summary">
+            <div class="detail-stat-item">
+                <h4>⚠️ Total Barang Stock Menipis</h4>
+                <p style="color: var(--accent-color); font-size: 2rem; font-weight: 700;">${lowStockItems.length}</p>
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <h3>📋 Daftar Barang yang Stock Menipis</h3>
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Nama Barang</th>
+                        <th>Stock Saat Ini</th>
+                        <th>Min. Stock</th>
+                        <th>Kekurangan</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${sortedItems.map((item, index) => {
+        const shortage = (item.minStock || 0) - (item.stock || 0);
+        let status = '⚠️ Menipis';
+        let statusColor = 'var(--accent-color)';
+
+        if (item.stock <= 0) {
+            status = '❌ Habis';
+            statusColor = 'var(--danger-color)';
+        }
+
+        return `
+                            <tr>
+                                <td style="text-align: center; font-weight: 600;">${index + 1}</td>
+                                <td style="font-weight: 600;">${item.name}</td>
+                                <td style="text-align: center; color: ${statusColor}; font-weight: 700;">${item.stock || 0}</td>
+                                <td style="text-align: center;">${item.minStock || 0}</td>
+                                <td style="text-align: center; color: var(--danger-color); font-weight: 600;">${shortage > 0 ? shortage : 0}</td>
+                                <td style="color: ${statusColor}; font-weight: 600; text-align: center;">${status}</td>
+                            </tr>
+                        `;
+    }).join('')}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="detail-section">
+            <h3>💡 Rekomendasi</h3>
+            <ul class="detail-list">
+                <li>
+                    <span class="detail-list-label">Segera lakukan pemesanan ulang untuk barang-barang di atas</span>
+                </li>
+                <li>
+                    <span class="detail-list-label">Periksa supplier untuk ketersediaan stock</span>
+                </li>
+                <li>
+                    <span class="detail-list-label">Pertimbangkan untuk menaikkan minimum stock jika sering terjadi kekurangan</span>
+                </li>
+            </ul>
+        </div>
+    `;
+
+    document.getElementById('detail-modal-title').textContent = '⚠️ Peringatan Stock Menipis';
+    document.getElementById('detail-modal-body').innerHTML = content;
+    document.getElementById('detail-modal').style.display = 'flex';
 }
 
 // --- FUNGSI MEMBUAT NOTA ---
@@ -849,6 +1036,30 @@ function addItemRow() {
     calculateTotalAmount();
 }
 
+function toggleLowStockCustomSelect() {
+    const container = document.getElementById('low-stock-search-container');
+    container.classList.toggle('open');
+}
+
+function selectLowStockOption(value, text) {
+    const container = document.getElementById('low-stock-search-container');
+    // Close Dropdown IMMEDIATELY
+    container.classList.remove('open');
+
+    const select = document.getElementById('low-stock-search-mode');
+    select.value = value;
+    const display = document.getElementById('low-stock-custom-value');
+    display.textContent = text;
+    const options = document.getElementById('low-stock-options-list').querySelectorAll('.custom-option');
+    options.forEach(opt => opt.classList.remove('selected'));
+
+    // Find with TRIMMED text
+    const selectedOpt = Array.from(options).find(opt => opt.textContent.trim() === text);
+    if (selectedOpt) selectedOpt.classList.add('selected');
+
+    renderLowStockMainTable();
+}
+
 function setupAutocomplete(input, rowId) {
     const dropdown = document.getElementById(`dropdown-${rowId}`);
     if (!input || !dropdown) return;
@@ -868,8 +1079,6 @@ function setupAutocomplete(input, rowId) {
 
         if (!val) {
             // Show all if empty (optional, or just return)
-            // sortedStock.forEach(...) 
-            // allowing empty search usually isn't desired for invoice, but let's allow it to show A-Z list if clicked
         }
 
         let matchCount = 0; // Initialize matchCount here
@@ -891,7 +1100,13 @@ function setupAutocomplete(input, rowId) {
                     } catch (e) { console.warn("Regex highlighting failed", e); }
                 }
 
-                itemDiv.innerHTML = `<span>${nameHtml}</span>`;
+                // Show Name AND Stock (Request Update)
+                itemDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; width: 100%;">
+                        <span>${nameHtml}</span>
+                        <span style="font-size: 0.85em; color: gray;">(Stock: ${item.stock})</span>
+                    </div>
+                `;
 
                 itemDiv.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -3046,6 +3261,10 @@ function toggleCustomSelect() {
 }
 
 function selectOption(value, text) {
+    const container = document.getElementById('stock-search-container');
+    // Close Dropdown IMMEDIATELY
+    container.classList.remove('open');
+
     // 1. Update Hidden Input Value
     const select = document.getElementById('stock-search-mode');
     select.value = value;
@@ -3054,34 +3273,32 @@ function selectOption(value, text) {
     const display = document.getElementById('custom-select-value');
     display.textContent = text;
 
-    // 3. Update Selected Styling
-    const options = document.querySelectorAll('.custom-option');
+    // 3. Update Selected Styling (Scoped to this container)
+    const options = container.querySelectorAll('.custom-option');
     options.forEach(opt => opt.classList.remove('selected'));
 
-    // Find the clicked element (naive approach or pass 'this' if onclick was inline)
-    // Since we pass string, let's find by text content
-    Array.from(options).find(opt => opt.textContent === text).classList.add('selected');
+    // Find the clicked element with TRIMMED text
+    const selectedOpt = Array.from(options).find(opt => opt.textContent.trim() === text);
+    if (selectedOpt) selectedOpt.classList.add('selected');
 
     // 4. Trigger Search/Render
     renderStockTable();
-
-    // 5. Close Dropdown
-    const container = document.getElementById('stock-search-container');
-    container.classList.remove('open');
 }
 
-// Close custom select when clicking outside
+// Close custom select when clicking outside (Generic for all custom selects)
 window.addEventListener('click', function (e) {
-    const container = document.getElementById('stock-search-container');
-    if (!container) return;
-
-    if (!container.contains(e.target)) {
-        container.classList.remove('open');
-    }
+    const containers = document.querySelectorAll('.custom-select-container');
+    containers.forEach(container => {
+        if (!container.contains(e.target)) {
+            container.classList.remove('open');
+        }
+    });
 });
 
 window.toggleCustomSelect = toggleCustomSelect;
 window.selectOption = selectOption;
+window.toggleLowStockCustomSelect = toggleLowStockCustomSelect;
+window.selectLowStockOption = selectLowStockOption;
 
 // --- LOGIC BARANG MASUK & KELUAR (NEW TRANSACTION SYSTEM) ---
 
