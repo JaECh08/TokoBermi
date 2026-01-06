@@ -574,7 +574,7 @@ function renderLowStockMainTable() {
             <td>${item.supplier || '-'}</td>
             <td style="text-align: center; color: ${statusColor}; font-weight: 700; font-size: 1.1rem;">${stockVal}</td>
             <td style="text-align: center;">${minStockVal}</td>
-            <td style="text-align: center; font-weight: 600; color: var(--danger-color);">-${shortage}</td>
+            <td style="text-align: center; font-weight: 600; color: var(--text-primary);">${item.minOrder || '-'}</td>
             <td style="text-align: center;">
                 <span style="background-color: ${stockVal <= 0 ? '#fee2e2' : '#fce7f3'}; color: ${statusColor}; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; border: 1px solid currentColor;">
                     ${status}
@@ -586,10 +586,31 @@ function renderLowStockMainTable() {
 
 function downloadLowStockExcel() {
     const stock = getData('stock');
-    const lowStockItems = stock.filter(item => (item.stock || 0) < (item.minStock || 0));
+    const searchInput = document.getElementById('low-stock-search');
+    const searchValue = searchInput ? searchInput.value.toLowerCase() : '';
+    const searchMode = document.getElementById('low-stock-search-mode') ? document.getElementById('low-stock-search-mode').value : 'name';
+
+    let lowStockItems = stock.filter(item => {
+        const stockVal = parseFloat(item.stock || 0);
+        const minStockVal = parseFloat(item.minStock || 0);
+        return stockVal < minStockVal;
+    });
+
+    // Apply Search Filter to match table view
+    if (searchValue) {
+        lowStockItems = lowStockItems.filter(item => {
+            if (searchMode === 'supplier') {
+                return item.supplier && item.supplier.toLowerCase().includes(searchValue);
+            }
+            return item.name && item.name.toLowerCase().includes(searchValue);
+        });
+    }
+
+    // Sort by Stock Level ascending (to match table view)
+    lowStockItems.sort((a, b) => (a.stock || 0) - (b.stock || 0));
 
     if (lowStockItems.length === 0) {
-        showAlert('Tidak ada data stock menipis untuk didownload.');
+        showAlert('Tidak ada data stock menipis untuk didownload (sesuai filter pencarian).');
         return;
     }
 
@@ -599,7 +620,7 @@ function downloadLowStockExcel() {
         'Supplier': item.supplier,
         'Stock Saat Ini': item.stock,
         'Min Stock': item.minStock,
-        'Kekurangan': (item.minStock || 0) - (item.stock || 0),
+        'Min Order': item.minOrder,
         'Status': (item.stock || 0) <= 0 ? 'Habis' : 'Menipis'
     }));
 
@@ -758,7 +779,7 @@ function showLowStockModal(lowStockItems) {
                         <th>Nama Barang</th>
                         <th>Stock Saat Ini</th>
                         <th>Min. Stock</th>
-                        <th>Kekurangan</th>
+                        <th>Min Order</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -779,7 +800,7 @@ function showLowStockModal(lowStockItems) {
                                 <td style="font-weight: 600;">${item.name}</td>
                                 <td style="text-align: center; color: ${statusColor}; font-weight: 700;">${item.stock || 0}</td>
                                 <td style="text-align: center;">${item.minStock || 0}</td>
-                                <td style="text-align: center; color: var(--danger-color); font-weight: 600;">${shortage > 0 ? shortage : 0}</td>
+                                <td style="text-align: center; color: var(--text-primary); font-weight: 600;">${item.minOrder || '-'}</td>
                                 <td style="color: ${statusColor}; font-weight: 600; text-align: center;">${status}</td>
                             </tr>
                         `;
