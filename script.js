@@ -1826,17 +1826,23 @@ function downloadStockExcel() {
     }
 
     // Format data untuk Excel
-    const excelData = stock.map((item, index) => ({
-        'No': index + 1,
-        'Nama Barang': item.name,
-        'Satuan': item.unit,
-        'Supplier': item.supplier,
-        'Jumlah Stock': item.stock,
-        'Min Order': item.minOrder,
-        'Min Stock': item.minStock,
-        'HPP': item.hpp,
-        'Harga Jual': item.price
-    }));
+    const excelData = stock.map((item, index) => {
+        const profit = item.price - item.hpp;
+        const profitPercentage = item.hpp > 0 ? ((profit / item.hpp) * 100).toFixed(2) : 0;
+        
+        return {
+            'No': index + 1,
+            'Nama Barang': item.name,
+            'Satuan': item.unit,
+            'Supplier': item.supplier,
+            'Jumlah Stock': item.stock,
+            'Min Order': item.minOrder,
+            'Min Stock': item.minStock,
+            'HPP': item.hpp,
+            'Harga Jual': item.price,
+            'Keuntungan (%)': `${profitPercentage}%`
+        };
+    });
 
     // Buat worksheet
     const worksheet = XLSX.utils.json_to_sheet(excelData);
@@ -1851,7 +1857,8 @@ function downloadStockExcel() {
         { wch: 15 }, // Min Order
         { wch: 15 }, // Min Stock
         { wch: 15 }, // HPP
-        { wch: 15 }  // Harga Jual
+        { wch: 15 }, // Harga Jual
+        { wch: 15 }  // Keuntungan (%)
     ];
     worksheet['!cols'] = wscols;
 
